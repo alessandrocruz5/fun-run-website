@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC for Vercel Remote Cache
+    steps:
+      - uses: actions/checkout@v7
+      # Short-lived Turborepo token via OIDC; no stored secret. Skipped until TURBO_TEAM is set.
+      - uses: vercel/setup-turborepo-remote-cache-action@v1.1.0
+        if: vars.TURBO_TEAM != ''
+        with:
+          team: ${{ vars.TURBO_TEAM }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      # Same build Vercel runs, with no env: secrets are read per request, never at build time.
+      - run: pnpm build

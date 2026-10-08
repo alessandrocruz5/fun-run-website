@@ -1,0 +1,25 @@
+{
+  "name": "fun-run-website",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "prettier": "@rr/config/prettier",
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json}\""
+  },
+  "devDependencies": {
+    "@rr/config": "workspace:*",
+    "eslint": "^10.12.0",
+    "prettier": "^3.9.9",
+    "turbo": "^2.11.7",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.3"
+  }
+}
