@@ -5,7 +5,7 @@ Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded 
 > with the recommended `model / effort / thinking`; `/build-unit` checks it before starting.
 
 ## Sprint 2 — Clearwater organizer dashboard   (planned 2026-10-08) · v0.2.0
-Epic: FRW-9 · Branch base: `main`
+Epic: FRW-9 · Branch base: `develop`
 
 **Locked decisions** (approved 2026-10-08 — do not re-litigate)
 - Separate `apps/admin`: its own Vercel project (`sin1`) and `*.vercel.app` URL. The public app holds no login secret.
@@ -34,7 +34,7 @@ Epic: FRW-9 · Branch base: `main`
 - [ ] FRW-12 — Registration detail, CSV export and demo links · Added · files: apps/admin/app/registrations/[reference]/page.tsx, apps/admin/app/registrations/export/route.ts, apps/admin/src/lib/{csv.ts,__tests__/csv.test.ts}, packages/db/src/admin/queries.ts, apps/web/app/register/success/page.tsx, apps/web/src/components/sections/footer.tsx, apps/web/.env.example · depends: FRW-11 · model: Sonnet 5.5 / high / thinking on
 
 ## Sprint 1 — Runner site, registration and test payments   (planned 2026-10-08) · v0.1.0
-Epic: FRW-1 · Branch base: `main`
+Epic: FRW-1 · Branch base: `develop`
 
 **Locked decisions** (approved 2026-10-08 — do not re-litigate)
 - Portfolio only: Riverline Run and Clearwater Collective are fictional. Test data and PayMongo test mode only; every page shows "Fictional event · Test mode, no real payments".
@@ -68,7 +68,7 @@ Epic: FRW-1 · Branch base: `main`
 - [ ] Before FRW-7: Turnstile widget → site + secret keys.
 - [ ] Before FRW-8: Resend account + verified (sub)domain (SPF/DKIM); `RESEND_API_KEY`, `EMAIL_FROM`.
 
-- [ ] FRW-2 — Monorepo scaffold, CI and repo guardrails · Added · files: package.json, pnpm-workspace.yaml, pnpm-lock.yaml, turbo.json, .nvmrc, .npmrc, .editorconfig, eslint.config.mjs, .gitignore, README.md, CLAUDE.md, .github/workflows/ci.yml, docs/runbook.md, packages/config/{package.json,eslint.config.js,prettier.config.js,tsconfig/base.json}, packages/env/{package.json,tsconfig.json,eslint.config.js,src/index.ts,src/__tests__/create-env.test.ts}, apps/web/{package.json,next.config.ts,tsconfig.json,eslint.config.js,postcss.config.mjs,vercel.json,vitest.config.ts,.env.example}, apps/web/app/{layout.tsx,page.tsx,globals.css,api/health/route.ts} · depends: — · model: Sonnet 5.5 / medium / thinking off
+- [x] FRW-2 — Monorepo scaffold, CI and repo guardrails · Added · files: package.json, pnpm-workspace.yaml, pnpm-lock.yaml, turbo.json, .nvmrc, .npmrc, .editorconfig, eslint.config.mjs, .gitignore, README.md, CLAUDE.md, .github/workflows/ci.yml, docs/runbook.md, packages/config/{package.json,eslint.config.js,prettier.config.js,tsconfig/base.json}, packages/env/{package.json,tsconfig.json,eslint.config.js,src/index.ts,src/__tests__/create-env.test.ts}, apps/web/{package.json,next.config.ts,tsconfig.json,eslint.config.js,postcss.config.mjs,vercel.json,vitest.config.ts,.env.example}, apps/web/app/{layout.tsx,page.tsx,globals.css,api/health/route.ts} · depends: — · model: Sonnet 5.5 / medium / thinking off
   - CLAUDE.md must have `## Project` (`Jira key: FRW`), `## Commands`, `## Review constraints` and `## High-stakes paths`: `/plan-feature` and `/build-unit` read them. `build-unit` and `code-guardian` are global; don't copy them in.
 - [ ] FRW-3 — Race list, registrations table and payment states · Added · files: packages/db/{package.json,tsconfig.json,eslint.config.js,vitest.config.ts,drizzle.config.ts,.env.example,README.md}, packages/db/src/{index.ts,client.ts,env.ts,races.ts,registrations.ts,schema/index.ts,schema/registrations.ts}, packages/db/drizzle/{0000_init.sql,0001_app_role.sql,meta/*}, packages/db/src/__tests__/{registrations.test.ts,grants.test.ts}, turbo.json, docs/runbook.md · depends: FRW-2 · model: Opus 5.5 / high / thinking on
 - [ ] FRW-4 — One-page site from the mockups · Added · files: docs/design/*, packages/ui/{package.json,tsconfig.json,eslint.config.js,src/index.ts,src/tokens.css,src/components/*}, apps/web/app/{layout.tsx,page.tsx,globals.css,privacy/page.tsx,opengraph-image.tsx,robots.ts,sitemap.ts,not-found.tsx}, apps/web/src/components/{test-mode-banner.tsx,sections/*.tsx}, apps/web/src/content/site.ts, apps/web/public/**, apps/web/{package.json,next.config.ts} · depends: FRW-3 · model: Opus 5.5 / high / thinking on
