@@ -25,7 +25,36 @@ linked (`vercel link`). Sections marked _TBD_ are filled in by the unit named.
 
 ## Migrations
 
-_TBD (FRW-3)._
+Neon project in `ap-southeast-1` with branches `main` (production) and `dev`. Migrations run as
+the owner, from a laptop, and never from CI or Vercel.
+
+1. Put the branch's **direct** (non-pooled) owner URL in `packages/db/.env` as
+   `MIGRATE_DATABASE_URL` (see `packages/db/.env.example`). Never add it to Vercel.
+2. Apply to `dev` first, then `main`:
+   ```sh
+   pnpm --filter @rr/db db:migrate
+   ```
+3. **Once per Neon branch, after migration `0001`:** create the app's login role. Use SQL
+   (`psql` or the Neon SQL editor, as the owner), **not** the Neon Console: Console roles join
+   `neon_superuser` and would bypass the least-privilege grants.
+   ```sql
+   -- password: openssl rand -base64 32
+   CREATE ROLE rr_app_login LOGIN PASSWORD '<password>' IN ROLE rr_app;
+   ```
+4. `DATABASE_URL` = the **pooled** URL (`-pooler` host) with `rr_app_login`. Set it in Vercel
+   (Production → `main` branch; Preview → `dev` branch) and in `apps/web/.env.local`, then
+   redeploy.
+5. Check the role is least-privilege:
+   ```sh
+   psql "$DATABASE_URL" -c "DELETE FROM registrations WHERE false"
+   # ERROR:  permission denied for table registrations
+   ```
+
+New schema changes: edit `packages/db/src/schema/`, then
+`pnpm --filter @rr/db db:generate --name <name>` and commit the SQL and `meta/`. Changes are
+expand/contract: add first, deploy the code that uses it, and remove the old shape in a later
+migration. An applied migration is never edited. A new table needs its own `GRANT` to `rr_app`
+in the migration.
 
 ## Payments (PayMongo test mode)
 
@@ -43,7 +72,12 @@ _TBD (FRW-8)._
 
 - **App:** Vercel dashboard → Deployments → the last good production deploy → **Instant
   Rollback**, or `vercel rollback <deployment-url>`. It takes effect at once, with no rebuild.
-- **Schema / data:** _TBD (FRW-3)._
+- **Schema:** never down-migrate or edit an applied migration. Because migrations are
+  expand/contract, the previous app deploy still runs on the newer schema: roll back the app
+  first, then fix forward with a new migration.
+- **Data:** Neon Console → the branch → **Restore** to a point in time inside the plan's history
+  window. Restore `dev` first to check the result. A restore also rewinds the roles, so re-check
+  `rr_app_login` afterwards.
 
 ## Env var changes
 
