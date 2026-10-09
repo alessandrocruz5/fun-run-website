@@ -168,7 +168,41 @@ in the migration.
 
 ## Bot protection (Turnstile)
 
-_TBD (FRW-7)._
+The registration form has two checks, both run on the server in `register()` before any database
+write or PayMongo call: a hidden honeypot input (`fax_number`) and a Cloudflare Turnstile token.
+Order: validate the fields, honeypot, then Turnstile. A typo therefore doesn't use up the
+single-use token.
+
+- **Keys:** Cloudflare dashboard → Turnstile → add a widget for the production hostname (managed
+  mode). Set `TURNSTILE_SITE_KEY` (public) and `TURNSTILE_SECRET_KEY` (server only) in Vercel for
+  **Production** and **Preview**, then redeploy. Add each Preview hostname you want to test on to
+  the widget, or use a second widget. Both are read per request, so the build needs neither.
+- **Never deploy the test keys.** Cloudflare's always-pass pair (site `1x00000000000000000000AA`,
+  secret `1x0000000000000000000000000000000AA`) switches the check off, with no error. Use them
+  only in `apps/web/.env.local`. The always-fail pair is `2x00000000000000000000AB` /
+  `2x0000000000000000000000000000000AA`; secret `3x0000000000000000000000000000000AA` answers
+  "token already used".
+- **Fail closed:** no token, an invalid, expired or reused token, a missing secret and an
+  unreachable Cloudflare all refuse the registration, with a retry message. A missing site key
+  disables the pay button and says registration is paused. Nothing is saved or sent to PayMongo.
+- **Honeypot:** a filled `fax_number` gets the same message as a failed checkout, with no field
+  errors and no Cloudflare call. It is logged as `registration.rejected` with `reason: honeypot`.
+  A person can only trip it if an extension fills hidden inputs.
+- **Logs:** `registration.rejected` carries `reason` (`honeypot`, `turnstile_missing`,
+  `turnstile_rejected`, `turnstile_unavailable`) and Cloudflare's error codes only: no token, no
+  personal data. `turnstile.env_invalid` and `turnstile.site_key_missing` name the variable at
+  fault. A burst of `turnstile_unavailable` with `invalid-input-secret` means the secret doesn't
+  match the widget's site key.
+- **Check it** (production, after the keys are set):
+  1. Open the site: the widget appears above the pay button and the button works once it passes.
+  2. Browser dev tools → delete the `cf-turnstile-response` input, submit: "We couldn't confirm
+     you're a person", and `registration.rejected` with `turnstile_missing` in the logs.
+  3. Submit twice with the same token (copy the input's value into a second submit): the second
+     is `turnstile_rejected` with `timeout-or-duplicate`.
+  4. Neon: no row was added by steps 2 and 3.
+- **Tests:** CI runs against fakes of Cloudflare's replies for the three test secret keys, not the
+  live endpoint, so a Cloudflare outage can't fail a build. They were checked against the real
+  endpoint on 2026-10-09.
 
 ## Email (Resend)
 
