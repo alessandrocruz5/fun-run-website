@@ -11,6 +11,19 @@ linked (`vercel link`). Sections marked _TBD_ are filled in by the unit named.
   functions to `sin1` (Singapore), next to the Neon `ap-southeast-1` database.
 - The build needs no environment variables. Variables added later are runtime-only.
 
+## Site URL
+
+- `SITE_URL` is the public origin with no trailing slash, e.g. `https://<prod-domain>`. It is
+  read per request for page metadata, `robots.txt`, `sitemap.xml` and the share image. If it is
+  missing, `robots.txt`, `sitemap.xml`, the share image and link-preview crawlers (Facebook, X)
+  get a 500. Browsers still get the page, without its metadata. The logs name `SITE_URL`.
+- Set it in Vercel for **Production** and **Preview**. Previews can use the production URL. Then
+  redeploy. Locally, copy `apps/web/.env.example` to `apps/web/.env.local`.
+- Check it:
+  ```sh
+  curl -s https://<prod-domain>/robots.txt | grep -i '^sitemap'   # Sitemap: https://<prod-domain>/sitemap.xml
+  ```
+
 ## Deploy
 
 1. Push a branch or open a PR. CI runs format check, lint, typecheck, tests and build. Vercel
