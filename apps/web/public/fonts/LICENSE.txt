@@ -1,0 +1,9 @@
+Fonts used to render the share preview image (app/opengraph-image.tsx).
+
+- archivo-900.woff, archivo-900-latin-ext.woff: Archivo, weight 900, latin and latin-ext
+  subsets. Copyright The Archivo Project Authors.
+- jetbrains-mono-600.woff: JetBrains Mono SemiBold 600, latin subset. Copyright The JetBrains
+  Mono Project Authors.
+
+Both are licensed under the SIL Open Font License, Version 1.1: https://openfontlicense.org
+Files from Fontsource (https://fontsource.org).

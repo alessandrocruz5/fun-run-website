@@ -1,15 +1,29 @@
-// Placeholder until the one-page site from the mockups (FRW-4).
+import type { Metadata } from "next";
+import { Cause } from "@/components/sections/cause";
+import { Hero } from "@/components/sections/hero";
+import { Kit } from "@/components/sections/kit";
+import { Register } from "@/components/sections/register";
+import { Routes } from "@/components/sections/routes";
+import { ScrollEffects } from "@/components/sections/scroll-effects";
+import { getRaceViews } from "@/content/site";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
+
 export default function HomePage() {
+  const races = getRaceViews();
+
   return (
-    <main className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-4 px-6 py-16">
-      <p className="text-sm font-medium tracking-wide uppercase">
-        Fictional event · Test mode, no real payments
-      </p>
-      <h1 className="text-4xl font-semibold">Riverline Run</h1>
-      <p>
-        A fictional fun run by the fictional Clearwater Collective, built as a portfolio project.
-        The site is under construction.
-      </p>
-    </main>
+    <>
+      <ScrollEffects />
+      <main>
+        <Hero races={races} />
+        <Routes races={races} initial="21k" />
+        <Kit races={races} />
+        <Cause />
+        <Register races={races} />
+      </main>
+    </>
   );
 }
