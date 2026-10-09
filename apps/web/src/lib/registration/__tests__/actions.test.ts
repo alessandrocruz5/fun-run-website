@@ -275,4 +275,49 @@ describe("register", () => {
     expect(state.status).toBe("error");
     expect(createPending).not.toHaveBeenCalled();
   });
+
+  it("cancels the row and sets no cookie when the session can't be saved", async () => {
+    payMongoReplies(sessionCreated);
+    vi.mocked(attachCheckoutSession).mockResolvedValue(null);
+    const state = await register(idle, form());
+
+    expect(state.status).toBe("error");
+    expect(markCancelled).toHaveBeenCalledWith(db, ROW_ID);
+    expect(cookieSet).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("logs the SQLSTATE of a database error, and a cancel that failed", async () => {
+    payMongoReplies(sessionCreated);
+    const denied = Object.assign(new Error("Failed query … params: juana@example.test"), {
+      name: "DrizzleQueryError",
+      cause: { code: "42501" },
+    });
+    vi.mocked(attachCheckoutSession).mockRejectedValue(denied);
+    vi.mocked(markCancelled).mockRejectedValue(denied);
+    await register(idle, form());
+
+    expect(consoleError).toHaveBeenCalledWith("registration.checkout_failed", {
+      registrationId: ROW_ID,
+      error: "DrizzleQueryError",
+      code: "42501",
+    });
+    expect(consoleError).toHaveBeenCalledWith("registration.cancel_failed", {
+      registrationId: ROW_ID,
+      error: "DrizzleQueryError",
+      code: "42501",
+    });
+    expect(JSON.stringify(consoleError.mock.calls)).not.toMatch(PERSONAL);
+  });
+
+  it("sets a non-Secure cookie only for a plain-http SITE_URL (local dev)", async () => {
+    vi.stubEnv("SITE_URL", "http://localhost:3000");
+    payMongoReplies(sessionCreated);
+    await register(idle, form()).catch(() => undefined);
+    expect(cookieSet).toHaveBeenCalledWith(
+      "rr_checkout",
+      "cs_test1",
+      expect.objectContaining({ secure: false }),
+    );
+  });
 });

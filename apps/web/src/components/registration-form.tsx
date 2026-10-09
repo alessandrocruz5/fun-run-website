@@ -1,5 +1,6 @@
 "use client";
 
+import { unstable_isUnrecognizedActionError, unstable_rethrow } from "next/navigation";
 import { type InputHTMLAttributes, useActionState, useEffect, useRef, useState } from "react";
 import type { RaceView } from "@/content/site";
 import { register } from "@/lib/registration/actions";
@@ -25,6 +26,34 @@ const FIELD_ORDER: RegisterField[] = [
 ];
 
 const SEX_LABELS: Record<string, string> = { female: "Female", male: "Male" };
+
+const UNREACHABLE =
+  "We couldn't reach the server. Nothing was charged and your details are still here: check your connection and try again.";
+const SITE_UPDATED =
+  "The site was updated while you were filling this in. Nothing was charged: reload the page and register again.";
+
+/**
+ * `register`, but a round trip that fails (connection lost, a deploy in between, a gateway error)
+ * comes back as a retry message instead of crashing the page and losing what was typed.
+ */
+async function registerOrRetry(
+  previous: RegisterState,
+  formData: FormData,
+): Promise<RegisterState> {
+  try {
+    return await register(previous, formData);
+  } catch (error) {
+    // The redirect to PayMongo arrives as a rejection: let Next handle it.
+    unstable_rethrow(error);
+    const values: RegisterState["values"] = {};
+    for (const field of FIELD_ORDER) {
+      const value = formData.get(field);
+      if (typeof value === "string") values[field] = value;
+    }
+    const message = unstable_isUnrecognizedActionError(error) ? SITE_UPDATED : UNREACHABLE;
+    return { status: "error", message, values };
+  }
+}
 
 const fieldId = (field: RegisterField) => `reg-${field}`;
 const errorId = (field: RegisterField) => `reg-${field}-error`;
@@ -73,10 +102,11 @@ type Props = {
 
 /**
  * The registration form. It posts to the `register` server action, which validates on the server
- * and redirects to PayMongo's hosted checkout. Prices shown here are display only.
+ * and redirects to PayMongo's hosted checkout. Prices shown here are display only. Submitting needs
+ * JavaScript, as PayMongo's checkout does.
  */
 export function RegistrationForm({ races, shirtSizes, sexes, initialRace }: Props) {
-  const [state, formAction, pending] = useActionState(register, INITIAL_STATE);
+  const [state, formAction, pending] = useActionState(registerOrRetry, INITIAL_STATE);
   const form = useRef<HTMLFormElement>(null);
   const submit = useRef<HTMLButtonElement>(null);
   // Mirrors the checked radios for the summary. React's reset after a submit restores the

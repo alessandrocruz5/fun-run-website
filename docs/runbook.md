@@ -99,14 +99,18 @@ in the migration.
   checkout. Test payments on production, or locally with `DATABASE_URL` on the `dev` branch.
 - **Logs** carry IDs, reasons and PayMongo error codes, never personal data:
   - `registration.checkout_failed`: PayMongo refused or didn't answer, or the database or env
-    failed. The row (if any) was set `cancelled`, and the runner saw a retry message.
+    failed (`code` is the SQLSTATE, e.g. `42501` for a missing grant). The row (if any) was set
+    `cancelled`, and the runner saw a retry message. `registration.cancel_failed` means that row
+    stayed `pending`.
   - `payment.check_failed`: the success page couldn't reach PayMongo or the database. The runner
     is told to check again.
   - `payment.rejected` with a `reason`. `amount_mismatch` means the paid amount differs from the
     snapshot: investigate, and never set a row to `paid` by hand. The others are `livemode`,
     `metadata_mismatch`, `unknown_session` and `not_recorded`.
-- **Paid but still `pending`:** the runner didn't get back to the success page. Opening
-  `/register/success` in the same browser within 24 hours records it.
+- **Paid but still `pending`:** the success page never checked that checkout. The cookie holds the
+  latest checkout only, so this happens when the runner didn't come back, or started a second
+  checkout before paying the first. Until FRW-6's webhook records it, look the session up in the
+  PayMongo dashboard; never set the row to `paid` by hand.
 - **Webhook:** _TBD (FRW-6)._
 
 ## Bot protection (Turnstile)

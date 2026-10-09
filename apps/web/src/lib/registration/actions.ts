@@ -68,7 +68,12 @@ async function startCheckout(input: RegistrationInput): Promise<string> {
   } catch (error) {
     logError("registration.checkout_failed", error, registrationId ? { registrationId } : {});
     // A row that never got a checkout can't be paid: don't leave it pending.
-    if (registrationId) await markCancelled(getDb(), registrationId).catch(() => null);
+    if (registrationId) {
+      const id = registrationId;
+      await markCancelled(getDb(), id).catch((cancelError: unknown) =>
+        logError("registration.cancel_failed", cancelError, { registrationId: id }),
+      );
+    }
     throw error;
   }
 }

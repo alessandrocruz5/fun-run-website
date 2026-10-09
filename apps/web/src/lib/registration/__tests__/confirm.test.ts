@@ -275,6 +275,13 @@ describe("checkCheckout", () => {
     expect(result).toEqual({ status: "paid", registration: paidRow });
   });
 
+  it("records a payment on a registration that was cancelled", async () => {
+    payMongoReplies(paidSession);
+    vi.mocked(getRegistrationByCheckoutSessionId).mockResolvedValue(row({ status: "cancelled" }));
+    expect(await checkCheckout("cs_test1")).toEqual({ status: "paid", registration: paidRow });
+    expect(markPaid).toHaveBeenCalledWith(db, expect.objectContaining({ amountCentavos: PRICE }));
+  });
+
   it("doesn't call PayMongo again for a registration already paid", async () => {
     const fetch = payMongoReplies(paidSession);
     vi.mocked(getRegistrationByCheckoutSessionId).mockResolvedValue(paidRow);

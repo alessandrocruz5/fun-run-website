@@ -23,18 +23,27 @@ import {
 /** httpOnly cookie, set by the form just before the redirect to PayMongo: the checkout session ID. */
 export const CHECKOUT_COOKIE = "rr_checkout";
 
+/** The Postgres SQLSTATE (e.g. `42501`) under a database error: a code, never data. */
+function sqlState(error: unknown): string | undefined {
+  const code = (error as { cause?: { code?: unknown } } | null)?.cause?.code;
+  return typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
+}
+
 /**
  * Log a failure without personal data (RA 10173): the error's class, plus PayMongo's status and
- * codes or the env keys at fault. Never the message of a database error, which quotes the query's
- * parameters (names, emails).
+ * codes, the env keys at fault or the SQLSTATE. Never the message of a database error, which
+ * quotes the query's parameters (names, emails).
  */
 export function logError(event: string, error: unknown, ids: Record<string, string> = {}): void {
+  const code = sqlState(error);
   const details =
     error instanceof PayMongoError
       ? { status: error.status, codes: error.codes }
       : error instanceof EnvValidationError
         ? { issues: error.issues }
-        : {};
+        : code
+          ? { code }
+          : {};
   console.error(event, {
     ...ids,
     error: error instanceof Error ? error.name : typeof error,
