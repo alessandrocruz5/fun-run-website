@@ -1,6 +1,14 @@
 import { createHmac } from "node:crypto";
-import { getDb, getRegistrationByCheckoutSessionId, markPaid, type Registration } from "@rr/db";
+import {
+  claimConfirmation,
+  getDb,
+  getRegistrationByCheckoutSessionId,
+  markPaid,
+  type Registration,
+  releaseConfirmation,
+} from "@rr/db";
 import { RACES } from "@rr/db/races";
+import { EmailError, sendRegistrationConfirmed } from "@rr/email";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST, runtime } from "../route";
 
@@ -11,6 +19,13 @@ vi.mock("@rr/db", async (importOriginal) => ({
   getDb: vi.fn(() => db),
   getRegistrationByCheckoutSessionId: vi.fn(),
   markPaid: vi.fn(),
+  claimConfirmation: vi.fn(),
+  releaseConfirmation: vi.fn(),
+}));
+
+vi.mock("@rr/email", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  sendRegistrationConfirmed: vi.fn(),
 }));
 
 const SECRET = "whsk_testsecret";
@@ -127,6 +142,13 @@ beforeEach(() => {
   vi.stubEnv("PAYMONGO_WEBHOOK_SECRET", SECRET);
   vi.mocked(getRegistrationByCheckoutSessionId).mockResolvedValue(row());
   vi.mocked(markPaid).mockResolvedValue(paidRow);
+  vi.mocked(claimConfirmation).mockImplementation(async () => ({
+    ...paidRow,
+    confirmationSentAt: new Date(),
+  }));
+  vi.mocked(releaseConfirmation).mockResolvedValue(true);
+  vi.mocked(sendRegistrationConfirmed).mockResolvedValue({ status: "sent", id: "email_1" });
+  vi.stubEnv("SITE_URL", "https://riverline.test");
   consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
   consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
@@ -142,6 +164,7 @@ function expectDatabaseUntouched() {
   expect(getDb).not.toHaveBeenCalled();
   expect(getRegistrationByCheckoutSessionId).not.toHaveBeenCalled();
   expect(markPaid).not.toHaveBeenCalled();
+  expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
 }
 
 describe("POST /api/webhooks/paymongo", () => {
@@ -287,5 +310,76 @@ describe("POST /api/webhooks/paymongo", () => {
       expect.objectContaining({ error: "EnvValidationError" }),
     );
     expectDatabaseUntouched();
+  });
+
+  describe("confirmation email", () => {
+    it("sends one email for a newly paid registration, keyed by its ID", async () => {
+      const response = await deliver(event());
+
+      expect(response.status).toBe(200);
+      expect(sendRegistrationConfirmed).toHaveBeenCalledTimes(1);
+      expect(sendRegistrationConfirmed).toHaveBeenCalledWith(
+        expect.objectContaining({ registrationId: ROW_ID, to: "juana@example.test" }),
+      );
+    });
+
+    it("returns 500 so PayMongo retries when the send fails, releasing the claim", async () => {
+      vi.mocked(sendRegistrationConfirmed).mockRejectedValueOnce(
+        new EmailError("Resend responded 500", 500, "application_error"),
+      );
+      const response = await deliver(event());
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: "unavailable" });
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(releaseConfirmation).toHaveBeenCalledWith(db, ROW_ID);
+      expect(consoleError).toHaveBeenCalledWith("webhook.confirm_failed", {
+        eventId: "evt_test1",
+        checkoutSessionId: "cs_test1",
+        error: "EmailError",
+        status: 500,
+        codes: ["application_error"],
+      });
+      expect(JSON.stringify(consoleError.mock.calls)).not.toMatch(/juana/i);
+    });
+
+    it("sends on PayMongo's retry after a failed send", async () => {
+      vi.mocked(sendRegistrationConfirmed).mockRejectedValueOnce(new EmailError("down", 503));
+      expect((await deliver(event())).status).toBe(500);
+
+      // The payment was recorded by the first attempt; the retry finds the row paid.
+      vi.mocked(getRegistrationByCheckoutSessionId).mockResolvedValue(paidRow);
+      const retry = await deliver(event());
+
+      expect(retry.status).toBe(200);
+      expect(await retry.json()).toEqual({ outcome: "paid" });
+      expect(sendRegistrationConfirmed).toHaveBeenCalledTimes(2);
+    });
+
+    it("sends nothing again for a repeat whose email already went out", async () => {
+      vi.mocked(getRegistrationByCheckoutSessionId).mockResolvedValue({
+        ...paidRow,
+        confirmationSentAt: new Date(),
+      });
+      const response = await deliver(event());
+
+      expect(response.status).toBe(200);
+      expect(claimConfirmation).not.toHaveBeenCalled();
+      expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
+    });
+
+    it("sends nothing while the success page holds the claim", async () => {
+      vi.mocked(claimConfirmation).mockResolvedValue(null);
+      const response = await deliver(event());
+
+      expect(response.status).toBe(200);
+      expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
+    });
+
+    it("sends nothing for a rejected amount", async () => {
+      await deliver(event({ amount: PRICE - 1 }));
+      expect(claimConfirmation).not.toHaveBeenCalled();
+      expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
+    });
   });
 });
