@@ -85,7 +85,8 @@ in the migration.
 - **Confirmation.** `/register/success` ignores its URL. It takes the session ID from the cookie,
   finds the row, reads the session from PayMongo and calls `confirmPayment()`. The row becomes
   `paid`, with payment ID, method, fee, net and `paid_at`, only when a payment is `paid`, not live
-  mode, in PHP and equal to the row's `amount_centavos`. Reloading the page is safe.
+  mode, in PHP and equal to the row's `amount_centavos`. Then the confirmation email goes out
+  once (see **Email** below). Reloading the page is safe.
 - **End-to-end check (production).** Register on the production site and pay with card
   `4343 4343 4343 4345`, any future expiry and any CVC. The success page must say **Confirmed**.
   Then, in the Neon SQL editor on `main`:
@@ -112,7 +113,9 @@ in the migration.
     deliveries means `PAYMONGO_WEBHOOK_SECRET` isn't the webhook's secret key.
   - `webhook.env_failed`: `PAYMONGO_WEBHOOK_SECRET` is missing or invalid. Every delivery gets 500
     until it is set and redeployed.
-  - `webhook.confirm_failed`: the database failed during a delivery. PayMongo retries it.
+  - `webhook.confirm_failed`: the database or the confirmation email failed during a delivery
+    (`error: "EmailError"` with Resend's status and code, or `EnvValidationError` naming
+    `RESEND_API_KEY` / `EMAIL_FROM`). PayMongo retries it.
   - `webhook.invalid_event`, `webhook.rejected` (`livemode`) and `webhook.unpaid`: a signed event
     the app couldn't use. See **Webhook** below.
 - **Paid but still `pending`:** neither the success page nor the webhook recorded it. Open the
@@ -145,7 +148,7 @@ in the migration.
   | 200 | `{"outcome":"unpaid"}` | The session in the event had no paid payment (`webhook.unpaid`). |
   | 400 | `{"error":"livemode"}` / `{"error":"invalid_event"}` | Signed, but a live-mode or unreadable event. Nothing changed. |
   | 401 | `{"error":"invalid_signature"}` | Signature missing, malformed, stale or wrong. The database is never touched. |
-  | 500 | `{"error":"unavailable"}` | Secret not configured, or the database failed. PayMongo retries. |
+  | 500 | `{"error":"unavailable"}` | Secret not configured, the database failed, or the confirmation email failed. PayMongo retries. |
 
   `rejected` with reason `unknown_session` is expected for checkouts started locally or on a
   Preview: there is one test webhook and it points at production, whose database doesn't have
@@ -206,7 +209,45 @@ single-use token.
 
 ## Email (Resend)
 
-_TBD (FRW-8)._
+One confirmation email per paid registration, sent by `@rr/email` through Resend's HTTP API. It
+has an HTML and a plain-text part (React Email) with the runner's name, race, reference and amount,
+the race date, venue, assembly time (30 minutes before gun time) and gun time, and the notice "Test
+payment: nothing was charged".
+
+- **Setup.** Resend → Domains → add a subdomain you control (e.g. `mail.<domain>`) and add its SPF
+  and DKIM records until it shows **Verified**. Resend → API Keys → a key with **Sending access**
+  for that domain only. Set `RESEND_API_KEY` and `EMAIL_FROM` (`Riverline Run <race@mail.<domain>>`)
+  in Vercel **Production** and **Preview**, then redeploy. Locally, `onboarding@resend.dev` as the
+  sender works without a domain, but only delivers to your Resend account's address.
+- **When it is sent.** Only after a payment is recorded: whichever of the webhook and the success
+  page sees `paid` claims the row (`confirmation_sent_at`, one conditional update), sends, and
+  keeps the claim. Every other caller finds the claim taken and sends nothing. Pending and
+  cancelled registrations never get an email. Resend's `Idempotency-Key` is the registration ID,
+  so a request repeated within 24 hours is never delivered twice.
+- **When sending fails** (Resend down, rate-limited, bad key, missing env), the claim is released
+  and the error rethrown: the webhook answers 500 so PayMongo retries, and the success page says
+  "We couldn't check just now" so the runner's **Check again** retries. The payment itself stays
+  recorded.
+- **Logs** carry the registration ID, Resend's status and error name, never an address or name:
+  - `email.send_failed`: the send failed and the claim was released. `401`/`403` is the key,
+    `422 validation_error` is usually `EMAIL_FROM` on an unverified domain, `429` is Resend's rate
+    limit. `EnvValidationError` names the missing variable.
+  - `email.release_failed`: the claim couldn't be released after a failed send (database down).
+    The row keeps `confirmation_sent_at` with no email sent. See **Stuck claim** below.
+  - `email.duplicate`: Resend had already used this registration's key with a different payload
+    (e.g. the template changed between two attempts within 24 hours). That earlier request went
+    out, so this one is treated as sent.
+- **Stuck claim.** A row with `confirmation_sent_at` set but no email in Resend → Emails (search by
+  the reference in the subject) means the function died mid-send. As the owner, clear the claim and
+  resend the webhook event from the PayMongo dashboard:
+  ```sql
+  UPDATE registrations SET confirmation_sent_at = NULL
+  WHERE reference = '<RR-…>' AND status = 'paid';
+  ```
+- **Check it** (production): pay with card `4343 4343 4343 4345` using an address you can read.
+  One email arrives with both parts (Gmail → Show original lists `text/plain` and `text/html`).
+  Resend → Emails shows one send for the reference. Reload `/register/success` and resend the
+  webhook event: still one email.
 
 ## Roll back
 

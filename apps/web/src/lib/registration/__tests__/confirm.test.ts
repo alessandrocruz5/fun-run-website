@@ -1,8 +1,16 @@
-import { type Db, getRegistrationByCheckoutSessionId, markPaid, type Registration } from "@rr/db";
+import {
+  claimConfirmation,
+  type Db,
+  getRegistrationByCheckoutSessionId,
+  markPaid,
+  type Registration,
+  releaseConfirmation,
+} from "@rr/db";
 import { RACES } from "@rr/db/races";
+import { EmailError, sendRegistrationConfirmed } from "@rr/email";
 import type { CheckoutSession, Payment } from "@rr/payments";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { checkCheckout, confirmPayment } from "../confirm";
+import { checkCheckout, confirmationDetails, confirmPayment, sendConfirmation } from "../confirm";
 
 const db = vi.hoisted(() => ({ fake: "db" }));
 
@@ -11,6 +19,13 @@ vi.mock("@rr/db", async (importOriginal) => ({
   getDb: () => db,
   getRegistrationByCheckoutSessionId: vi.fn(),
   markPaid: vi.fn(),
+  claimConfirmation: vi.fn(),
+  releaseConfirmation: vi.fn(),
+}));
+
+vi.mock("@rr/email", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  sendRegistrationConfirmed: vi.fn(),
 }));
 
 const ROW_ID = "0b9f6c1e-1111-4222-8333-444455556666";
@@ -88,6 +103,13 @@ let consoleError: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   vi.mocked(getRegistrationByCheckoutSessionId).mockResolvedValue(row());
   vi.mocked(markPaid).mockResolvedValue(paidRow);
+  vi.mocked(claimConfirmation).mockImplementation(async () => ({
+    ...paidRow,
+    confirmationSentAt: new Date(),
+  }));
+  vi.mocked(releaseConfirmation).mockResolvedValue(true);
+  vi.mocked(sendRegistrationConfirmed).mockResolvedValue({ status: "sent", id: "email_1" });
+  vi.stubEnv("SITE_URL", "https://riverline.test");
   consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
   consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
@@ -310,5 +332,267 @@ describe("checkCheckout", () => {
     );
     expect(await checkCheckout("cs_test1")).toEqual({ status: "unavailable" });
     expect(JSON.stringify(consoleError.mock.calls)).not.toMatch(/juana/);
+  });
+});
+
+describe("confirmation email", () => {
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  /**
+   * An in-memory registrations row behind the mocked `@rr/db` steps. Each step is atomic, as its
+   * one conditional UPDATE is in Postgres, but yields first so concurrent callers interleave.
+   */
+  function storedRow(initial: Registration) {
+    let current = { ...initial };
+    vi.mocked(getRegistrationByCheckoutSessionId).mockImplementation(async () => ({ ...current }));
+    vi.mocked(markPaid).mockImplementation(async (_db, input) => {
+      await tick();
+      if (current.status === "paid") return null;
+      current = {
+        ...current,
+        status: "paid",
+        paymentId: input.paymentId,
+        paymentMethod: input.paymentMethod,
+        feeCentavos: input.feeCentavos,
+        netCentavos: input.netCentavos,
+        paidAt: input.paidAt,
+      };
+      return { ...current };
+    });
+    vi.mocked(claimConfirmation).mockImplementation(async () => {
+      await tick();
+      if (current.status !== "paid" || current.confirmationSentAt) return null;
+      current = { ...current, confirmationSentAt: new Date() };
+      return { ...current };
+    });
+    vi.mocked(releaseConfirmation).mockImplementation(async () => {
+      const released = current.confirmationSentAt !== null;
+      current = { ...current, confirmationSentAt: null };
+      return released;
+    });
+    return () => current;
+  }
+
+  function resendTakes(ms: number) {
+    vi.mocked(sendRegistrationConfirmed).mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      return { status: "sent", id: "email_1" };
+    });
+  }
+
+  function payMongoReturnsPaid() {
+    vi.stubEnv("PAYMONGO_SECRET_KEY", "sk_test_abc123");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          data: {
+            id: "cs_test1",
+            attributes: {
+              checkout_url: "https://checkout.paymongo.com/cs_test1_client_x",
+              status: "active",
+              livemode: false,
+              metadata: { registration_id: ROW_ID },
+              payments: [
+                {
+                  id: "pay_test1",
+                  attributes: {
+                    status: "paid",
+                    amount: PRICE,
+                    currency: "PHP",
+                    fee: 2_500,
+                    net_amount: PRICE - 2_500,
+                    livemode: false,
+                    paid_at: PAID_AT.getTime() / 1000,
+                    source: { type: "card" },
+                  },
+                },
+              ],
+            },
+          },
+        }),
+      ),
+    );
+  }
+
+  it("sends the runner's email after recording the payment, keyed by the registration ID", async () => {
+    storedRow(row());
+    await confirmPayment(db as unknown as Db, session());
+
+    expect(sendRegistrationConfirmed).toHaveBeenCalledTimes(1);
+    expect(sendRegistrationConfirmed).toHaveBeenCalledWith({
+      registrationId: ROW_ID,
+      to: "juana@example.test",
+      details: {
+        eventName: "Riverline Run 2027",
+        organizer: "Clearwater Collective",
+        firstName: "Juana",
+        fullName: "Juana Dela Cruz",
+        raceLabel: "10K Run",
+        reference: "RR-TEST0001",
+        amount: "₱1,000",
+        raceDay: "Sun · Apr 18, 2027",
+        venue: "Port Meridian Waterfront",
+        assemblyTime: "4:30 AM",
+        gunTime: "5:00 AM",
+        privacyUrl: "https://riverline.test/privacy",
+        retentionDays: 7,
+      },
+    });
+  });
+
+  it("sends exactly one email when the webhook, the success page and retries all fire", async () => {
+    const stored = storedRow(row());
+    payMongoReturnsPaid();
+    resendTakes(5);
+
+    const results = await Promise.all([
+      confirmPayment(db as unknown as Db, session()), // webhook
+      checkCheckout("cs_test1"), // success page
+      confirmPayment(db as unknown as Db, session()), // webhook retry
+      checkCheckout("cs_test1"), // reload
+      confirmPayment(db as unknown as Db, session()), // dashboard resend
+    ]);
+    // …and again once everything has settled.
+    results.push(
+      await confirmPayment(db as unknown as Db, session()),
+      await checkCheckout("cs_test1"),
+    );
+
+    expect(results.every((r) => r.status === "paid")).toBe(true);
+    expect(sendRegistrationConfirmed).toHaveBeenCalledTimes(1);
+    expect(stored().confirmationSentAt).not.toBeNull();
+  });
+
+  it("releases the claim and throws when sending fails, so the retry sends it", async () => {
+    const stored = storedRow(row());
+    vi.mocked(sendRegistrationConfirmed).mockRejectedValueOnce(
+      new EmailError("Resend responded 500", 500, "application_error"),
+    );
+
+    await expect(confirmPayment(db as unknown as Db, session())).rejects.toBeInstanceOf(EmailError);
+    expect(releaseConfirmation).toHaveBeenCalledWith(db, ROW_ID);
+    expect(stored()).toMatchObject({ status: "paid", confirmationSentAt: null });
+
+    expect(await confirmPayment(db as unknown as Db, session())).toMatchObject({
+      status: "paid",
+    });
+    expect(await confirmPayment(db as unknown as Db, session())).toMatchObject({
+      status: "paid",
+    });
+    expect(sendRegistrationConfirmed).toHaveBeenCalledTimes(2);
+    expect(stored().confirmationSentAt).not.toBeNull();
+  });
+
+  it("releases the claim when the email can't even be built", async () => {
+    const stored = storedRow(row());
+    vi.stubEnv("SITE_URL", "");
+
+    await expect(confirmPayment(db as unknown as Db, session())).rejects.toThrow(/SITE_URL/);
+    expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
+    expect(stored().confirmationSentAt).toBeNull();
+  });
+
+  it("logs a failed send by registration ID, status and code only", async () => {
+    storedRow(row());
+    vi.mocked(sendRegistrationConfirmed).mockRejectedValueOnce(
+      new EmailError("Resend responded 422", 422, "validation_error"),
+    );
+
+    await confirmPayment(db as unknown as Db, session()).catch(() => undefined);
+
+    expect(consoleError).toHaveBeenCalledWith("email.send_failed", {
+      registrationId: ROW_ID,
+      error: "EmailError",
+      status: 422,
+      codes: ["validation_error"],
+    });
+    expect(JSON.stringify(consoleError.mock.calls)).not.toMatch(/juana|Juana|Dela Cruz/);
+  });
+
+  it("still throws the send's error when releasing the claim fails too", async () => {
+    storedRow(row());
+    vi.mocked(sendRegistrationConfirmed).mockRejectedValueOnce(new EmailError("down", 503));
+    vi.mocked(releaseConfirmation).mockRejectedValueOnce(new Error("connection lost"));
+
+    await expect(confirmPayment(db as unknown as Db, session())).rejects.toMatchObject({
+      status: 503,
+    });
+    expect(consoleError).toHaveBeenCalledWith(
+      "email.release_failed",
+      expect.objectContaining({ registrationId: ROW_ID }),
+    );
+  });
+
+  it("success page: a failed send reports unavailable, and checking again sends it", async () => {
+    storedRow(row());
+    payMongoReturnsPaid();
+    vi.mocked(sendRegistrationConfirmed).mockRejectedValueOnce(new EmailError("down", 503));
+
+    expect(await checkCheckout("cs_test1")).toEqual({ status: "unavailable" });
+    expect(await checkCheckout("cs_test1")).toMatchObject({ status: "paid" });
+    expect(sendRegistrationConfirmed).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["pending", row(), [payment({ status: "pending" })]],
+    ["cancelled", row({ status: "cancelled" }), []],
+    ["pending (failed payment)", row(), [payment({ status: "failed" })]],
+  ])("sends nothing for a %s registration", async (_case, registration, payments) => {
+    storedRow(registration);
+    expect(await confirmPayment(db as unknown as Db, session({ payments }))).toMatchObject({
+      status: "unpaid",
+    });
+    expect(claimConfirmation).not.toHaveBeenCalled();
+    expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing for a rejected payment", async () => {
+    storedRow(row());
+    await confirmPayment(
+      db as unknown as Db,
+      session({ payments: [payment({ amountCentavos: 1 })] }),
+    );
+    expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("never sends for a row that isn't paid, even when asked directly", async () => {
+    for (const status of ["pending", "cancelled"] as const) {
+      await sendConfirmation(db as unknown as Db, row({ status }));
+    }
+    expect(claimConfirmation).not.toHaveBeenCalled();
+    expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("doesn't claim again for a row whose email already went out", async () => {
+    await sendConfirmation(db as unknown as Db, { ...paidRow, confirmationSentAt: new Date() });
+    expect(claimConfirmation).not.toHaveBeenCalled();
+    expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("doesn't send when another caller holds the claim", async () => {
+    vi.mocked(claimConfirmation).mockResolvedValue(null);
+    await sendConfirmation(db as unknown as Db, paidRow);
+    expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("logs a duplicate (key reused with another payload) and keeps the claim", async () => {
+    vi.mocked(sendRegistrationConfirmed).mockResolvedValue({ status: "duplicate" });
+    await sendConfirmation(db as unknown as Db, paidRow);
+    expect(consoleWarn).toHaveBeenCalledWith("email.duplicate", { registrationId: ROW_ID });
+    expect(releaseConfirmation).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["5k", "5:00 AM", "5:30 AM"],
+    ["10k", "4:30 AM", "5:00 AM"],
+    ["21k", "4:00 AM", "4:30 AM"],
+    ["42k", "3:30 AM", "4:00 AM"],
+  ] as const)("asks %s runners to assemble at %s for a %s gun", (race, assembly, gun) => {
+    expect(confirmationDetails(row({ race }))).toMatchObject({
+      raceLabel: RACES[race].label,
+      assemblyTime: assembly,
+      gunTime: gun,
+    });
   });
 });
