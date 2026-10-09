@@ -71,7 +71,47 @@ in the migration.
 
 ## Payments (PayMongo test mode)
 
-_TBD (FRW-5, FRW-6)._
+- **Key.** PayMongo Dashboard → Developers → API keys, in **test mode**. Only the secret key is
+  used: Hosted Checkout needs no public key. Set `PAYMONGO_SECRET_KEY` in Vercel (Production and
+  Preview) and in `apps/web/.env.local`, then redeploy. Anything not starting `sk_test_` fails
+  validation: the form shows its retry message and the logs show `registration.checkout_failed`
+  naming `PAYMONGO_SECRET_KEY`. Never use a live key or a `NEXT_PUBLIC_` prefix.
+- **Flow.** The form's server action saves a `pending` row (price from `RACES`), creates a
+  checkout session whose only metadata is `registration_id`, saves the `cs_…` ID on the row, sets
+  the httpOnly `rr_checkout` cookie (path `/register`, 24 hours) and redirects to
+  `checkout.paymongo.com`. Card, GCash, Maya and GrabPay are offered; all are simulated in test
+  mode. PayMongo sends the runner back to `SITE_URL/register/success`, or `/register/cancelled`
+  from its back link.
+- **Confirmation.** `/register/success` ignores its URL. It takes the session ID from the cookie,
+  finds the row, reads the session from PayMongo and calls `confirmPayment()`. The row becomes
+  `paid`, with payment ID, method, fee, net and `paid_at`, only when a payment is `paid`, not live
+  mode, in PHP and equal to the row's `amount_centavos`. Reloading the page is safe.
+- **End-to-end check (production).** Register on the production site and pay with card
+  `4343 4343 4343 4345`, any future expiry and any CVC. The success page must say **Confirmed**.
+  Then, in the Neon SQL editor on `main`:
+  ```sql
+  SELECT reference, status, amount_centavos, payment_method, fee_centavos, net_centavos, paid_at
+  FROM registrations ORDER BY created_at DESC LIMIT 1;
+  -- status paid, payment_method card, fee/net/paid_at filled in
+  ```
+- **Previews.** When Preview's `SITE_URL` is the production URL, PayMongo returns the runner to
+  production, which doesn't have the preview's cookie: the success page says it can't find the
+  checkout. Test payments on production, or locally with `DATABASE_URL` on the `dev` branch.
+- **Logs** carry IDs, reasons and PayMongo error codes, never personal data:
+  - `registration.checkout_failed`: PayMongo refused or didn't answer, or the database or env
+    failed (`code` is the SQLSTATE, e.g. `42501` for a missing grant). The row (if any) was set
+    `cancelled`, and the runner saw a retry message. `registration.cancel_failed` means that row
+    stayed `pending`.
+  - `payment.check_failed`: the success page couldn't reach PayMongo or the database. The runner
+    is told to check again.
+  - `payment.rejected` with a `reason`. `amount_mismatch` means the paid amount differs from the
+    snapshot: investigate, and never set a row to `paid` by hand. The others are `livemode`,
+    `metadata_mismatch`, `unknown_session` and `not_recorded`.
+- **Paid but still `pending`:** the success page never checked that checkout. The cookie holds the
+  latest checkout only, so this happens when the runner didn't come back, or started a second
+  checkout before paying the first. Until FRW-6's webhook records it, look the session up in the
+  PayMongo dashboard; never set the row to `paid` by hand.
+- **Webhook:** _TBD (FRW-6)._
 
 ## Bot protection (Turnstile)
 

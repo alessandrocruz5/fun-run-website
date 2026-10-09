@@ -35,6 +35,9 @@ importers:
       '@rr/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@rr/payments':
+        specifier: workspace:*
+        version: link:../../packages/payments
       '@rr/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -142,6 +145,31 @@ importers:
 
   packages/env:
     dependencies:
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@rr/config':
+        specifier: workspace:*
+        version: link:../config
+      '@types/node':
+        specifier: ^24.19.1
+        version: 24.19.1
+      eslint:
+        specifier: ^10.12.0
+        version: 10.12.0(jiti@2.7.0)
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.3
+        version: 5.0.3(@types/node@24.19.1)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
+
+  packages/payments:
+    dependencies:
+      '@rr/env':
+        specifier: workspace:*
+        version: link:../env
       zod:
         specifier: ^4.6.5
         version: 4.6.5

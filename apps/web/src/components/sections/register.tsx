@@ -1,9 +1,11 @@
 import { Badge } from "@rr/ui";
+import { RegistrationForm } from "@/components/registration-form";
 import type { RaceView } from "@/content/site";
+import { SEXES, SHIRT_SIZES } from "@/lib/registration/schema";
 
 /**
- * The `#register` anchor every call to action points at. FRW-5 replaces the note with the
- * registration form and PayMongo test checkout.
+ * The `#register` anchor every call to action points at: the registration form, which hands over
+ * to PayMongo's test checkout.
  */
 export function Register({ races }: { races: RaceView[] }) {
   return (
@@ -15,25 +17,9 @@ export function Register({ races }: { races: RaceView[] }) {
         <Badge variant="accent">TEST TRANSACTIONS ONLY</Badge>
       </div>
 
-      <ul className="opts" data-reveal data-stagger>
-        {races.map((race) => (
-          <li key={race.id} className="opt">
-            <h3>{race.shortName}</h3>
-            <span className="label">{race.label}</span>
-            <span className="mono text-[13px]">{race.price}</span>
-            <small>
-              {race.includes} · Gun time {race.start}
-            </small>
-          </li>
-        ))}
-      </ul>
-
-      <div className="reg-note dark" data-reveal>
-        <div className="mono text-accent">REGISTRATION OPENS SOON</div>
-        <p>
-          Sign-up and payment arrive in the next release. Payments will run through PayMongo in test
-          mode: no card is ever charged, and the event itself is fictional.
-        </p>
+      {/* The reveal sits on a static wrapper: the form re-renders, which would drop `.in`. */}
+      <div data-reveal>
+        <RegistrationForm races={races} shirtSizes={SHIRT_SIZES} sexes={SEXES} initialRace="21k" />
       </div>
     </section>
   );
