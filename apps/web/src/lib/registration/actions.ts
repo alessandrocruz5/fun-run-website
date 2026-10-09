@@ -7,20 +7,45 @@ import { redirect } from "next/navigation";
 import { getSiteUrl, SITE } from "@/content/site";
 import { CHECKOUT_COOKIE, logError } from "./confirm";
 import { parseRegistration, type RegisterState, type RegistrationInput } from "./schema";
+import { HONEYPOT_FIELD, TURNSTILE_FIELD, verifyTurnstile } from "./turnstile";
 
 const CHECKOUT_FAILED =
   "We couldn't start the payment just now. Nothing was charged and your details are still here: please try again.";
 
+const NOT_VERIFIED =
+  "We couldn't confirm you're a person. Nothing was charged and your details are still here: wait for the check above the pay button to finish, then try again.";
+const VERIFY_UNAVAILABLE =
+  "We couldn't run the check that you're a person just now. Nothing was charged and your details are still here: please try again.";
+
 /**
- * The registration form's action: save a pending registration, create its PayMongo checkout
- * session, save the session ID, then redirect to PayMongo. The price is the race's from `RACES`.
+ * The registration form's action: check the honeypot and Turnstile, save a pending registration,
+ * create its PayMongo checkout session, save the session ID, then redirect to PayMongo. The price
+ * is the race's from `RACES`. A bad token or a filled honeypot stops it before any database write
+ * or PayMongo call.
  */
 export async function register(
   _previous: RegisterState,
   formData: FormData,
 ): Promise<RegisterState> {
   const parsed = parseRegistration(formData);
+
+  // Silent: the same message as any other failure, so a bot learns nothing about the decoy.
+  if (formData.get(HONEYPOT_FIELD)) {
+    console.warn("registration.rejected", { reason: "honeypot" });
+    return { status: "error", message: CHECKOUT_FAILED, values: parsed.values };
+  }
   if (!parsed.success) return { status: "invalid", errors: parsed.errors, values: parsed.values };
+
+  // After validation, so a typo doesn't use up the single-use token; before anything is saved.
+  const human = await verifyTurnstile(formData.get(TURNSTILE_FIELD));
+  if (!human.ok) {
+    console.warn("registration.rejected", {
+      reason: `turnstile_${human.reason}`,
+      codes: human.codes,
+    });
+    const message = human.reason === "unavailable" ? VERIFY_UNAVAILABLE : NOT_VERIFIED;
+    return { status: "error", message, values: parsed.values };
+  }
 
   let checkoutUrl: string;
   try {

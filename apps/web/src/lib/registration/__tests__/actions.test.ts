@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { register } from "../actions";
 import type { RegisterState } from "../schema";
+import { verifyTurnstile } from "../turnstile";
 
 const calls = vi.hoisted(() => [] as string[]);
 const db = vi.hoisted(() => ({ fake: "db" }));
@@ -16,6 +17,10 @@ vi.mock("next/navigation", () => ({
     calls.push("redirect");
     throw new Error(`NEXT_REDIRECT ${url}`);
   }),
+}));
+vi.mock("../turnstile", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  verifyTurnstile: vi.fn(),
 }));
 vi.mock("@rr/db", async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -41,6 +46,7 @@ const runner = {
   emergencyContactName: "Pedro Dela Cruz",
   emergencyContactMobile: "+63 917-000-0001",
   consent: "yes",
+  "cf-turnstile-response": "tok_from_widget",
 };
 const PERSONAL = /juana|dela cruz|pedro|example\.test|917/i;
 
@@ -104,6 +110,7 @@ function sentBody(fetch: ReturnType<typeof payMongoReplies>) {
 }
 
 let consoleError: ReturnType<typeof vi.spyOn>;
+let consoleWarn: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   vi.stubEnv("SITE_URL", "https://riverline.test/");
@@ -117,8 +124,13 @@ beforeEach(() => {
     return { ...pendingRow("10k"), id, checkoutSessionId };
   });
   vi.mocked(markCancelled).mockResolvedValue(null);
+  vi.mocked(verifyTurnstile).mockImplementation(async () => {
+    calls.push("turnstile");
+    return { ok: true };
+  });
   cookieSet.mockImplementation(() => calls.push("cookie"));
   consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
@@ -127,6 +139,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   consoleError.mockRestore();
+  consoleWarn.mockRestore();
 });
 
 describe("register", () => {
@@ -135,6 +148,7 @@ describe("register", () => {
     await expect(register(idle, form())).rejects.toThrow(`NEXT_REDIRECT ${CHECKOUT_URL}`);
 
     expect(calls).toEqual([
+      "turnstile",
       "createPending",
       "paymongo",
       "attachCheckoutSession",
@@ -211,6 +225,8 @@ describe("register", () => {
     expect(Object.keys(state.errors ?? {})).toEqual(["consent"]);
     expect(createPending).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
+    // A typo doesn't use up the single-use token.
+    expect(verifyTurnstile).not.toHaveBeenCalled();
   });
 
   it("returns an error per field and what was typed, without saving anything", async () => {
@@ -319,5 +335,89 @@ describe("register", () => {
       "cs_test1",
       expect.objectContaining({ secure: false }),
     );
+  });
+});
+
+describe("register: bot protection", () => {
+  it("verifies the token the widget posted", async () => {
+    payMongoReplies(sessionCreated);
+    await register(idle, form({ "cf-turnstile-response": "tok_abc" })).catch(() => undefined);
+    expect(verifyTurnstile).toHaveBeenCalledWith("tok_abc");
+  });
+
+  it.each([
+    ["missing", /person/i],
+    ["rejected", /person/i],
+    ["unavailable", /try again/i],
+  ] as const)(
+    "a %s token stops the registration before any database write or PayMongo call",
+    async (reason, message) => {
+      const fetch = payMongoReplies(sessionCreated);
+      vi.mocked(verifyTurnstile).mockResolvedValue({
+        ok: false,
+        reason,
+        codes: ["timeout-or-duplicate"],
+      });
+      const state = await register(idle, form());
+
+      expect(state).toMatchObject({
+        status: "error",
+        message: expect.stringMatching(message),
+        values: expect.objectContaining({ email: "juana@example.test" }),
+      });
+      expect(createPending).not.toHaveBeenCalled();
+      expect(attachCheckoutSession).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+      expect(cookieSet).not.toHaveBeenCalled();
+      expect(redirect).not.toHaveBeenCalled();
+      expect(consoleWarn).toHaveBeenCalledWith("registration.rejected", {
+        reason: `turnstile_${reason}`,
+        codes: ["timeout-or-duplicate"],
+      });
+      expect(JSON.stringify(consoleWarn.mock.calls)).not.toMatch(PERSONAL);
+    },
+  );
+
+  it("treats a missing token as missing, without trusting any other field", async () => {
+    vi.mocked(verifyTurnstile).mockResolvedValue({ ok: false, reason: "missing" });
+    const state = await register(idle, form({ "cf-turnstile-response": null }));
+    expect(verifyTurnstile).toHaveBeenCalledWith(null);
+    expect(state.status).toBe("error");
+    expect(createPending).not.toHaveBeenCalled();
+  });
+
+  it("silently rejects a filled honeypot: same message as any failure, nothing saved or sent", async () => {
+    const fetch = payMongoReplies(sessionCreated);
+    const state = await register(idle, form({ fax_number: "555-0100" }));
+
+    expect(state).toMatchObject({ status: "error", message: expect.stringMatching(/try again/i) });
+    expect(state.errors).toBeUndefined();
+    expect(verifyTurnstile).not.toHaveBeenCalled();
+    expect(createPending).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
+    expect(consoleWarn).toHaveBeenCalledWith("registration.rejected", { reason: "honeypot" });
+  });
+
+  it("gives a filled honeypot the same answer as a failed checkout", async () => {
+    const honeypot = await register(idle, form({ fax_number: "x" }));
+
+    payMongoReplies(() => Response.json({ errors: [{ code: "x" }] }, { status: 500 }));
+    const failed = await register(idle, form());
+
+    expect(honeypot.message).toBe(failed.message);
+    expect(honeypot.status).toBe(failed.status);
+  });
+
+  it("rejects a filled honeypot even when the form is invalid, with no field errors", async () => {
+    const state = await register(idle, form({ fax_number: "x", email: "nope" }));
+    expect(state.status).toBe("error");
+    expect(state.errors).toBeUndefined();
+  });
+
+  it("lets an empty honeypot through", async () => {
+    payMongoReplies(sessionCreated);
+    await expect(register(idle, form({ fax_number: "" }))).rejects.toThrow("NEXT_REDIRECT");
+    expect(createPending).toHaveBeenCalledTimes(1);
   });
 });

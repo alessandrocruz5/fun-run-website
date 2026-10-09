@@ -1,12 +1,36 @@
 "use client";
 
 import { unstable_isUnrecognizedActionError, unstable_rethrow } from "next/navigation";
+import Script from "next/script";
 import { type InputHTMLAttributes, useActionState, useEffect, useRef, useState } from "react";
 import type { RaceView } from "@/content/site";
 import { register } from "@/lib/registration/actions";
 import type { RegisterField, RegisterState } from "@/lib/registration/schema";
 
-// Types only from the schema module: the server validates, so zod stays out of the browser.
+// Types only from the schema module: the server validates, so zod stays out of the browser. The
+// honeypot's name is a literal for the same reason: turnstile.ts is server only.
+const HONEYPOT_FIELD = "fax_number";
+
+type TurnstileApi = {
+  render(
+    container: HTMLElement,
+    options: {
+      sitekey: string;
+      theme: "dark";
+      size: "flexible" | "compact";
+      callback(): void;
+      "error-callback"(): void;
+    },
+  ): string;
+  reset(widgetId: string): void;
+  remove(widgetId: string): void;
+};
+
+declare global {
+  interface Window {
+    turnstile?: TurnstileApi;
+  }
+}
 
 const INITIAL_STATE: RegisterState = { status: "idle" };
 
@@ -93,11 +117,71 @@ function TextField({
   );
 }
 
+/** Narrower than the widget's 300px minimum, it switches to the compact size (150px). */
+const FLEXIBLE_MIN_WIDTH = 300;
+
+/**
+ * Cloudflare Turnstile, rendered explicitly so React owns the lifecycle. The widget adds a hidden
+ * `cf-turnstile-response` input inside the form. Tokens are single use, so the widget resets after
+ * every response from the server. The widget is Cloudflare's own accessible iframe; this adds the
+ * group label and a message when the check can't load.
+ */
+function TurnstileWidget({ siteKey, state }: { siteKey: string; state: RegisterState }) {
+  const container = useRef<HTMLDivElement>(null);
+  const widgetId = useRef<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  const mount = () => {
+    const node = container.current;
+    if (!window.turnstile || !node || widgetId.current) return;
+    widgetId.current = window.turnstile.render(node, {
+      sitekey: siteKey,
+      theme: "dark",
+      size: node.clientWidth < FLEXIBLE_MIN_WIDTH ? "compact" : "flexible",
+      callback: () => setFailed(false),
+      "error-callback": () => setFailed(true),
+    });
+  };
+
+  // A script that is already loaded (client-side navigation, strict-mode remount) needs no onReady.
+  useEffect(() => {
+    mount();
+    return () => {
+      if (widgetId.current) window.turnstile?.remove(widgetId.current);
+      widgetId.current = null;
+    };
+  }, [siteKey]);
+
+  useEffect(() => {
+    if (state.status !== "idle" && widgetId.current) window.turnstile?.reset(widgetId.current);
+  }, [state]);
+
+  return (
+    <div role="group" aria-label="Check that you are a person">
+      <Script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+        strategy="afterInteractive"
+        onReady={mount}
+        onError={() => setFailed(true)}
+      />
+      <div ref={container} />
+      {failed && (
+        <p className="errbox" role="alert">
+          The check that you&apos;re a person couldn&apos;t load. Check your connection and reload
+          the page.
+        </p>
+      )}
+    </div>
+  );
+}
+
 type Props = {
   races: RaceView[];
   shirtSizes: readonly string[];
   sexes: readonly string[];
   initialRace: RaceView["id"];
+  /** `null` when `TURNSTILE_SITE_KEY` isn't set: registration is paused rather than unprotected. */
+  turnstileSiteKey: string | null;
 };
 
 /**
@@ -105,7 +189,13 @@ type Props = {
  * and redirects to PayMongo's hosted checkout. Prices shown here are display only. Submitting needs
  * JavaScript, as PayMongo's checkout does.
  */
-export function RegistrationForm({ races, shirtSizes, sexes, initialRace }: Props) {
+export function RegistrationForm({
+  races,
+  shirtSizes,
+  sexes,
+  initialRace,
+  turnstileSiteKey,
+}: Props) {
   const [state, formAction, pending] = useActionState(registerOrRetry, INITIAL_STATE);
   const form = useRef<HTMLFormElement>(null);
   const submit = useRef<HTMLButtonElement>(null);
@@ -298,6 +388,14 @@ export function RegistrationForm({ races, shirtSizes, sexes, initialRace }: Prop
           </div>
           <FieldError field="consent" message={errors.consent} />
         </div>
+
+        {/* The honeypot: off-screen and out of the tab order, so only a bot fills it in. */}
+        <div aria-hidden="true" className="absolute -left-[10000px] h-px w-px overflow-hidden">
+          <label>
+            Leave this field empty
+            <input type="text" name={HONEYPOT_FIELD} tabIndex={-1} autoComplete="off" />
+          </label>
+        </div>
       </div>
 
       <div className="summary dark">
@@ -324,6 +422,14 @@ export function RegistrationForm({ races, shirtSizes, sexes, initialRace }: Prop
           <span className="mono">TOTAL</span>
           <b>{race?.price}</b>
         </div>
+        {turnstileSiteKey ? (
+          <TurnstileWidget siteKey={turnstileSiteKey} state={state} />
+        ) : (
+          <p className="errbox" role="alert">
+            Registration is paused while the check that you&apos;re a person is unavailable. Please
+            try again later.
+          </p>
+        )}
         {state.status === "error" && (
           <p className="errbox" role="alert">
             {state.message}
@@ -332,7 +438,7 @@ export function RegistrationForm({ races, shirtSizes, sexes, initialRace }: Prop
         {state.status === "invalid" && (
           <p className="errbox">Some details need fixing: see the highlighted fields.</p>
         )}
-        <button ref={submit} type="submit" className="pay" disabled={pending}>
+        <button ref={submit} type="submit" className="pay" disabled={pending || !turnstileSiteKey}>
           {pending ? "OPENING PAYMONGO…" : `PAY ${race?.price ?? ""} (TEST)`}
         </button>
         <p className="m-0 text-xs leading-[1.45] opacity-75">
