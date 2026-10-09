@@ -48,6 +48,11 @@ export default function PrivacyPage() {
         We never see or store card numbers. You enter payment details on PayMongo&apos;s own
         checkout page.
       </p>
+      <p>
+        When you go to checkout, we put one cookie in your browser. It holds your PayMongo checkout
+        ID so our confirmation page can check your payment. It is sent only to our registration
+        pages, can&apos;t be read by scripts and expires after 24 hours.
+      </p>
 
       <h2>Why we use it</h2>
       <ul>
