@@ -9,4 +9,18 @@ export {
   type PayMongoClient,
   PayMongoError,
 } from "./checkout";
-export { getPaymentsEnv, paymentsEnvSchema, testSecretKeySchema } from "./env";
+export {
+  getPaymentsEnv,
+  getWebhookEnv,
+  paymentsEnvSchema,
+  testSecretKeySchema,
+  webhookEnvSchema,
+} from "./env";
+export {
+  CHECKOUT_SESSION_PAID,
+  parseWebhookEvent,
+  SIGNATURE_HEADER,
+  type SignatureCheck,
+  verifyWebhookSignature,
+  type WebhookEvent,
+} from "./webhook";
