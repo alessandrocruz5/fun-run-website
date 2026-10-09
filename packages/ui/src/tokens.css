@@ -1,0 +1,54 @@
+/*
+ * Riverline Run design tokens (docs/design/README.md), shared by the runner site and the
+ * organizer dashboard. Import after Tailwind:
+ *
+ *   @import "tailwindcss";
+ *   @import "@rr/ui/tokens.css";
+ *
+ * Each token is a CSS variable (`--color-ink`) and a Tailwind utility (`bg-ink`). The font
+ * variables expect next/font to set `--font-archivo`, `--font-instrument-sans` and
+ * `--font-jetbrains-mono` on <html>.
+ */
+
+/* Button and Badge are written with Tailwind classes: scan them from every app that imports this. */
+@source "./components";
+
+@theme {
+  --color-paper: #f3efe6;
+  --color-ink: #10233a;
+  --color-ink-2: #1a3552;
+  --color-line: #33506f;
+  --color-river-dark: #1e4466;
+  --color-accent: #ff5a1f;
+  /* Orange text on paper. #ff5a1f is 2.7:1 there; this is 3.3:1, so large text only. */
+  --color-accent-strong: #e84c14;
+  --color-river: #9cc8d9;
+  --color-sand: #e4dccb;
+  --color-rule: #d6cdb9;
+  --color-grid: #e0d8c7;
+  --color-field: #fbf9f4;
+  --color-error: #c2330a;
+  --color-error-bg: #fbe3d9;
+  --color-jet: #0a0f16;
+
+  --font-display: var(--font-archivo), "Archivo", system-ui, sans-serif;
+  --font-sans: var(--font-instrument-sans), "Instrument Sans", system-ui, sans-serif;
+  /* Archivo supplies ₱, which JetBrains Mono lacks. */
+  --font-mono:
+    var(--font-jetbrains-mono), "JetBrains Mono", var(--font-archivo, "Archivo"), ui-monospace,
+    monospace;
+
+  --radius-tag: 4px;
+  --radius-input: 12px;
+  --radius-option: 16px;
+  --radius-card: 24px;
+  --radius-map: 28px;
+
+  --shadow-lift: 0 10px 24px rgb(16 35 58 / 0.18);
+  --shadow-card: 0 24px 48px rgb(16 35 58 / 0.18);
+  --shadow-medal:
+    inset 0 0 0 6px rgb(255 255 255 / 0.28), inset 0 0 0 9px rgb(0 0 0 / 0.15),
+    0 10px 24px rgb(16 35 58 / 0.22);
+
+  --ease-riverline: cubic-bezier(0.2, 0.7, 0.1, 1);
+}

@@ -12,9 +12,15 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@rr/db": "workspace:*",
+    "@rr/email": "workspace:*",
+    "@rr/env": "workspace:*",
+    "@rr/payments": "workspace:*",
+    "@rr/ui": "workspace:*",
     "next": "^16.4.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@rr/config": "workspace:*",

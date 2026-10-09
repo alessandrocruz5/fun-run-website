@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+body{margin:0;background:#F3EFE6;color:#10233A;font-family:'Instrument Sans',sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#10233A}a:hover{color:#FF5A1F}
+input{font:inherit}
+input:focus{outline:2px solid #FF5A1F;outline-offset:1px}
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#F3EFE6">
+
+<sc-if value="{{ showBanner }}" hint-placeholder-val="{{ true }}">
+<div style="background:#FF5A1F;color:#10233A;font:600 12px/1.4 'JetBrains Mono',monospace;padding:9px 20px;display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:center;text-align:center">
+<span>● TEST MODE — no real charges</span><span>Success card 4242 4242 4242 4242</span><span>Decline card 4000 0000 0000 0002</span>
+</div>
+</sc-if>
+
+<header style="max-width:1240px;margin:0 auto;padding:20px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap">
+<div style="display:flex;align-items:center;gap:10px">
+<div style="width:34px;height:34px;border-radius:50%;background:#10233A;display:grid;place-items:center"><div style="width:18px;height:6px;border-top:3px solid #FF5A1F;border-bottom:3px solid #9CC8D9;border-radius:6px"></div></div>
+<div style="font:800 18px/1 'Archivo',sans-serif;font-stretch:125%;letter-spacing:-.01em">RIVERLINE RUN</div>
+</div>
+<nav style="display:flex;gap:22px;flex-wrap:wrap;font:500 14px/1 'Instrument Sans',sans-serif">
+<a href="#routes" style="text-decoration:none">Routes</a>
+<a href="#kit" style="text-decoration:none">Shirts &amp; Medals</a>
+<a href="#cause" style="text-decoration:none">The Cause</a>
+<a href="#register" style="text-decoration:none;background:#10233A;color:#F3EFE6;padding:10px 16px;border-radius:999px;margin-top:-10px;margin-bottom:-10px">Register</a>
+</nav>
+</header>
+
+<section data-screen-label="01 Hero" style="max-width:1240px;margin:0 auto;padding:28px 28px 64px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:40px;align-items:center">
+<div style="display:flex;flex-direction:column;gap:26px">
+<div style="font:600 12px/1 'JetBrains Mono',monospace;letter-spacing:.08em;display:flex;gap:10px;flex-wrap:wrap">
+<span style="border:1.5px solid #10233A;padding:7px 10px;border-radius:999px">SUN · APR 18, 2027</span>
+<span style="border:1.5px solid #10233A;padding:7px 10px;border-radius:999px">PORT MERIDIAN WATERFRONT</span>
+</div>
+<h1 style="margin:0;font:900 clamp(56px,9vw,128px)/.86 'Archivo',sans-serif;font-stretch:125%;letter-spacing:-.035em;text-transform:uppercase">Run the<br><span style="color:#FF5A1F">river</span>line.</h1>
+<p style="margin:0;max-width:30em;font-size:19px;line-height:1.5;text-wrap:pretty">Four distances along the Meridian River — from a 5K stroll to the full 42.2K. Every entry funds river restoration and clean water work by the Clearwater Collective.</p>
+<div style="display:flex;gap:12px;flex-wrap:wrap">
+<a href="#register" style="text-decoration:none;background:#FF5A1F;color:#10233A;font:800 16px/1 'Archivo',sans-serif;font-stretch:110%;padding:18px 26px;border-radius:999px;letter-spacing:.02em">REGISTER — FROM $35</a>
+<a href="#routes" style="text-decoration:none;border:2px solid #10233A;font:700 16px/1 'Archivo',sans-serif;font-stretch:110%;padding:16px 24px;border-radius:999px">SEE THE ROUTES</a>
+</div>
+</div>
+<div style="position:relative;background:#10233A;border-radius:28px;aspect-ratio:600/460;overflow:hidden">
+<svg viewBox="0 0 600 460" style="position:absolute;inset:0;width:100%;height:100%">
+<path d="M-20 130 C120 100 200 210 320 220 S520 310 640 340" fill="none" stroke="#1E4466" stroke-width="56" stroke-linecap="round"></path>
+<path d="M-20 130 C120 100 200 210 320 220 S520 310 640 340" fill="none" stroke="#9CC8D9" stroke-width="2" stroke-dasharray="4 10" opacity=".6"></path>
+<path d="M300 238 C220 224 160 180 90 150 C40 128 20 70 70 46 C140 20 230 50 280 90 C330 130 420 120 480 130 C550 142 590 200 580 260 C572 320 590 370 540 405 C480 440 380 420 320 400 C250 378 160 390 110 350 C70 316 120 280 180 272 C230 266 270 256 300 238 Z" fill="none" stroke="#FF5A1F" stroke-width="6" stroke-linejoin="round"></path>
+<circle cx="300" cy="238" r="13" fill="#F3EFE6"></circle><circle cx="300" cy="238" r="6" fill="#10233A"></circle>
+</svg>
+<div style="position:absolute;left:22px;bottom:20px;color:#F3EFE6;font:600 12px/1.5 'JetBrains Mono',monospace">FULL MARATHON COURSE<br><span style="color:#FF5A1F">42.195 KM · 2 BRIDGES · 1 RIVER</span></div>
+<div style="position:absolute;right:20px;top:20px;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+<sc-for list="{{ dists }}" as="d" hint-placeholder-count="4">
+<div style="background:#F3EFE6;color:#10233A;font:800 14px/1 'Archivo',sans-serif;font-stretch:120%;padding:8px 12px;border-radius:999px">{{ d.name }}</div>
+</sc-for>
+</div>
+</div>
+</section>
+
+<section id="routes" data-screen-label="02 Routes" style="background:#10233A;color:#F3EFE6;scroll-margin-top:0">
+<div style="max-width:1240px;margin:0 auto;padding:72px 28px;display:flex;flex-direction:column;gap:32px">
+<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap">
+<h2 style="margin:0;font:900 clamp(40px,6vw,76px)/.9 'Archivo',sans-serif;font-stretch:125%;letter-spacing:-.03em">THE ROUTES</h2>
+<div style="display:flex;gap:6px;background:#1A3552;padding:6px;border-radius:999px;flex-wrap:wrap">
+<sc-for list="{{ dists }}" as="d" hint-placeholder-count="4">
+<button onClick="{{ d.pickRoute }}" style="border:0;cursor:pointer;padding:12px 20px;border-radius:999px;font:800 15px/1 'Archivo',sans-serif;font-stretch:115%;background:{{ d.tabBg }};color:{{ d.tabFg }}">{{ d.name }}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:28px">
+<div style="background:#F3EFE6;border-radius:24px;overflow:hidden;position:relative;aspect-ratio:600/440">
+<svg viewBox="0 0 600 440" style="position:absolute;inset:0;width:100%;height:100%">
+<defs><pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0H0V30" fill="none" stroke="#E0D8C7" stroke-width="1"></path></pattern></defs>
+<rect width="600" height="440" fill="url(#grid)"></rect>
+<path d="M-20 120 C120 90 200 200 320 210 S520 300 640 330" fill="none" stroke="#9CC8D9" stroke-width="44" stroke-linecap="round"></path>
+<line x1="190" y1="100" x2="230" y2="210" stroke="#10233A" stroke-width="7" opacity=".25"></line>
+<line x1="440" y1="225" x2="470" y2="320" stroke="#10233A" stroke-width="7" opacity=".25"></line>
+<path d="{{ route.path }}" fill="none" stroke="#10233A" stroke-width="10" stroke-linejoin="round" opacity=".12"></path>
+<path d="{{ route.path }}" fill="none" stroke="#FF5A1F" stroke-width="5" stroke-linejoin="round"></path>
+<path d="{{ route.path }}" fill="none" stroke="#F3EFE6" stroke-width="1.5" stroke-dasharray="2 14" stroke-linejoin="round"></path>
+<circle cx="300" cy="228" r="12" fill="#10233A"></circle><circle cx="300" cy="228" r="5" fill="#FF5A1F"></circle>
+<text x="318" y="252" font-family="JetBrains Mono" font-size="12" font-weight="600" fill="#10233A">START / FINISH · HARBOR PLAZA</text>
+<text x="40" y="200" font-family="JetBrains Mono" font-size="11" fill="#10233A" opacity=".55">MERIDIAN RIVER</text>
+</svg>
+<div style="position:absolute;left:16px;top:16px;background:#10233A;color:#F3EFE6;font:600 11px/1 'JetBrains Mono',monospace;padding:7px 10px;border-radius:6px">{{ route.full }} · COURSE MAP</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:22px">
+<div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+<div style="font:900 clamp(64px,8vw,104px)/.85 'Archivo',sans-serif;font-stretch:125%;color:#FF5A1F;letter-spacing:-.04em">{{ route.km }}</div>
+<div style="font:600 13px/1 'JetBrains Mono',monospace;opacity:.7">KILOMETERS</div>
+</div>
+<p style="margin:0;font-size:18px;line-height:1.5;max-width:34em;text-wrap:pretty">{{ route.blurb }}</p>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid #33506F;border-bottom:1px solid #33506F">
+<div style="padding:14px 10px 14px 0;display:flex;flex-direction:column;gap:6px"><span style="font:600 11px/1 'JetBrains Mono',monospace;opacity:.6">START</span><span style="font:800 20px/1 'Archivo',sans-serif">{{ route.start }}</span></div>
+<div style="padding:14px 10px;display:flex;flex-direction:column;gap:6px;border-left:1px solid #33506F"><span style="font:600 11px/1 'JetBrains Mono',monospace;opacity:.6">GAIN</span><span style="font:800 20px/1 'Archivo',sans-serif">{{ route.gain }}</span></div>
+<div style="padding:14px 10px;display:flex;flex-direction:column;gap:6px;border-left:1px solid #33506F"><span style="font:600 11px/1 'JetBrains Mono',monospace;opacity:.6">AID STATIONS</span><span style="font:800 20px/1 'Archivo',sans-serif">{{ route.aid }}</span></div>
+<div style="padding:14px 10px;display:flex;flex-direction:column;gap:6px;border-left:1px solid #33506F"><span style="font:600 11px/1 'JetBrains Mono',monospace;opacity:.6">CUTOFF</span><span style="font:800 20px/1 'Archivo',sans-serif">{{ route.cutoff }}</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font:600 11px/1 'JetBrains Mono',monospace;opacity:.6">ELEVATION PROFILE</span>
+<svg viewBox="0 0 600 120" preserveAspectRatio="none" style="width:100%;height:96px;display:block">
+<polygon points="{{ elevArea }}" fill="#FF5A1F" opacity=".22"></polygon>
+<polyline points="{{ elevLine }}" fill="none" stroke="#FF5A1F" stroke-width="2.5" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ route.highlights }}" as="h" hint-placeholder-count="3">
+<div style="display:flex;gap:12px;align-items:baseline;font-size:15px;line-height:1.4"><span style="font:600 11px/1 'JetBrains Mono',monospace;color:#FF5A1F;min-width:44px">{{ h.at }}</span><span>{{ h.text }}</span></div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section id="kit" data-screen-label="03 Shirts and Medals" style="max-width:1240px;margin:0 auto;padding:80px 28px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap">
+<h2 style="margin:0;font:900 clamp(40px,6vw,76px)/.9 'Archivo',sans-serif;font-stretch:125%;letter-spacing:-.03em">WEAR IT.<br>EARN IT.</h2>
+<p style="margin:0;max-width:26em;font-size:17px;line-height:1.5">Every runner gets the race jersey in their packet. Finisher shirts are handed out only past the line — Half and Full only.</p>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px">
+<div style="background:#E4DCCB;border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;justify-content:space-between;font:600 11px/1 'JetBrains Mono',monospace"><span>RACE JERSEY</span><span>ALL DISTANCES</span></div>
+<svg viewBox="0 0 300 310" style="width:100%;height:auto;display:block">
+<defs><clipPath id="tee1"><path d="M95 20 L120 10 C130 32 170 32 180 10 L205 20 L282 62 L256 122 L225 106 L225 300 L75 300 L75 106 L44 122 L18 62 Z"></path></clipPath></defs>
+<g clip-path="url(#tee1)">
+<rect width="300" height="310" fill="#10233A"></rect>
+<path d="M-10 200 C60 170 120 240 190 205 S280 170 320 190 L320 230 C260 210 230 260 170 245 S60 215 -10 240 Z" fill="#FF5A1F"></path>
+<path d="M-10 250 C60 225 120 285 190 255 S280 225 320 245" fill="none" stroke="#9CC8D9" stroke-width="5"></path>
+<path d="M-10 266 C60 241 120 301 190 271 S280 241 320 261" fill="none" stroke="#9CC8D9" stroke-width="2"></path>
+<rect x="18" y="62" width="60" height="60" fill="#1E4466"></rect><rect x="222" y="62" width="60" height="60" fill="#1E4466"></rect>
+<text x="150" y="110" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="26" fill="#F3EFE6" style="font-stretch:125%">RIVERLINE</text>
+<text x="150" y="134" text-anchor="middle" font-family="JetBrains Mono" font-weight="600" font-size="11" fill="#FF5A1F">RUN · 2027</text>
+</g>
+<path d="M120 10 C130 32 170 32 180 10" fill="none" stroke="#FF5A1F" stroke-width="4"></path>
+</svg>
+<div style="display:flex;flex-direction:column;gap:4px"><div style="font:800 22px/1.1 'Archivo',sans-serif;font-stretch:115%">River Navy Tech Tee</div><div style="font-size:14px;opacity:.75">Recycled poly, mesh side panels, reflective wave print.</div></div>
+</div>
+
+<div style="background:#FF5A1F;border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;justify-content:space-between;font:600 11px/1 'JetBrains Mono',monospace"><span>FINISHER SHIRT</span><span>HALF · 21.1K</span></div>
+<svg viewBox="0 0 300 310" style="width:100%;height:auto;display:block">
+<defs><clipPath id="tee2"><path d="M95 20 L120 10 C130 32 170 32 180 10 L205 20 L282 62 L256 122 L225 106 L225 300 L75 300 L75 106 L44 122 L18 62 Z"></path></clipPath></defs>
+<g clip-path="url(#tee2)">
+<rect width="300" height="310" fill="#F3EFE6"></rect>
+<text x="150" y="160" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="66" fill="#FF5A1F" style="font-stretch:125%">21.1</text>
+<text x="150" y="186" text-anchor="middle" font-family="JetBrains Mono" font-weight="600" font-size="12" fill="#10233A">HALF · FINISHER</text>
+<path d="M90 220 C120 205 150 235 180 220 S210 205 225 212" fill="none" stroke="#10233A" stroke-width="3"></path>
+<text x="150" y="252" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#10233A" opacity=".7">RIVERLINE RUN 2027</text>
+</g>
+<path d="M120 10 C130 32 170 32 180 10" fill="none" stroke="#10233A" stroke-width="4"></path>
+</svg>
+<div style="display:flex;flex-direction:column;gap:4px"><div style="font:800 22px/1.1 'Archivo',sans-serif;font-stretch:115%">Bone White Finisher</div><div style="font-size:14px">Heavyweight cotton, puff-print 21.1 on the chest.</div></div>
+</div>
+
+<div style="background:#10233A;color:#F3EFE6;border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;justify-content:space-between;font:600 11px/1 'JetBrains Mono',monospace"><span>FINISHER SHIRT</span><span style="color:#FF5A1F">FULL · 42.2K</span></div>
+<svg viewBox="0 0 300 310" style="width:100%;height:auto;display:block">
+<defs><clipPath id="tee3"><path d="M95 20 L120 10 C130 32 170 32 180 10 L205 20 L282 62 L256 122 L225 106 L225 300 L75 300 L75 106 L44 122 L18 62 Z"></path></clipPath></defs>
+<g clip-path="url(#tee3)">
+<rect width="300" height="310" fill="#0A0F16"></rect>
+<path d="M150 70 C120 72 96 92 100 112 C104 130 132 128 150 138 C168 148 196 150 200 170 C204 192 180 206 150 208 C124 210 104 196 110 180" fill="none" stroke="#FF5A1F" stroke-width="4"></path>
+<circle cx="150" cy="70" r="6" fill="#F3EFE6"></circle>
+<text x="150" y="246" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="30" fill="#F3EFE6" style="font-stretch:125%">42.195</text>
+<text x="150" y="266" text-anchor="middle" font-family="JetBrains Mono" font-weight="600" font-size="10" fill="#FF5A1F">I RAN THE WHOLE RIVER</text>
+</g>
+<path d="M120 10 C130 32 170 32 180 10" fill="none" stroke="#FF5A1F" stroke-width="4"></path>
+</svg>
+<div style="display:flex;flex-direction:column;gap:4px"><div style="font:800 22px/1.1 'Archivo',sans-serif;font-stretch:115%">Blackwater Marathoner</div><div style="font-size:14px;opacity:.8">Course line printed full-size across the chest.</div></div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:24px">
+<div style="font:600 12px/1 'JetBrains Mono',monospace;letter-spacing:.06em">FINISHER MEDALS — ONE PER DISTANCE</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:20px;align-items:end">
+<sc-for list="{{ dists }}" as="d" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;align-items:center;gap:0;padding:28px 16px 22px;border:1.5px solid #D6CDB9;border-radius:24px">
+<div style="display:flex;gap:2px;height:{{ d.ribbonH }}"><div style="width:26px;background:#10233A;transform:skewX(14deg)"></div><div style="width:26px;background:#FF5A1F;transform:skewX(-14deg)"></div></div>
+<div style="width:{{ d.medalSize }};height:{{ d.medalSize }};border-radius:50%;background:{{ d.metal }};box-shadow:inset 0 0 0 6px rgba(255,255,255,.28),inset 0 0 0 9px rgba(0,0,0,.15),0 10px 24px rgba(16,35,58,.22);display:grid;place-items:center;margin-top:-4px">
+<div style="width:72%;height:72%;border-radius:50%;background:{{ d.face }};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:{{ d.faceInk }}">
+<span style="font:900 30px/1 'Archivo',sans-serif;font-stretch:125%">{{ d.medalLabel }}</span>
+<span style="font:600 8px/1 'JetBrains Mono',monospace;letter-spacing:.1em">RIVERLINE ’27</span>
+</div>
+</div>
+<div style="margin-top:18px;font:800 17px/1 'Archivo',sans-serif;font-stretch:115%">{{ d.full }}</div>
+<div style="margin-top:6px;font-size:13px;opacity:.7">{{ d.medal }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</section>
+
+<section id="cause" data-screen-label="04 The Cause" style="background:#9CC8D9">
+<div style="max-width:1240px;margin:0 auto;padding:80px 28px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:48px;align-items:center">
+<div style="aspect-ratio:5/4;border-radius:24px;background:repeating-linear-gradient(135deg,#8BBACC 0 14px,#94C1D3 14px 28px);display:grid;place-items:center;border:1.5px dashed #10233A">
+<span style="font:600 12px/1.4 'JetBrains Mono',monospace;text-align:center;padding:16px">PHOTO — Clearwater volunteers<br>at a riverbank cleanup</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:22px">
+<div style="font:600 12px/1 'JetBrains Mono',monospace;letter-spacing:.06em">ORGANIZED BY THE CLEARWATER COLLECTIVE</div>
+<h2 style="margin:0;font:900 clamp(36px,5vw,64px)/.92 'Archivo',sans-serif;font-stretch:125%;letter-spacing:-.03em">Every kilometer keeps a river running clean.</h2>
+<p style="margin:0;font-size:18px;line-height:1.55;text-wrap:pretty">Clearwater Collective is a non-profit that restores urban waterways and funds clean drinking water projects in communities that don't have it. 100% of race surplus — after permits, medals and shirts — goes straight to field work.</p>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;border-top:2px solid #10233A;padding-top:18px">
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font:900 34px/1 'Archivo',sans-serif;font-stretch:115%">$20</span><span style="font-size:13px;line-height:1.35">of every entry funded to field work</span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font:900 34px/1 'Archivo',sans-serif;font-stretch:115%">14 km</span><span style="font:400 13px/1.35 'Instrument Sans'">of Meridian riverbank restored since 2019</span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font:900 34px/1 'Archivo',sans-serif;font-stretch:115%">31</span><span style="font-size:13px;line-height:1.35">community wells built</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section id="register" data-screen-label="05 Register" style="max-width:1240px;margin:0 auto;padding:80px 28px;display:flex;flex-direction:column;gap:32px">
+<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap">
+<h2 style="margin:0;font:900 clamp(40px,6vw,76px)/.9 'Archivo',sans-serif;font-stretch:125%;letter-spacing:-.03em">REGISTER</h2>
+<span style="font:600 12px/1 'JetBrains Mono',monospace;background:#FF5A1F;padding:8px 12px;border-radius:999px">TEST TRANSACTIONS ONLY</span>
+</div>
+
+<sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
+<div style="background:#10233A;color:#F3EFE6;border-radius:28px;padding:clamp(28px,5vw,56px);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:36px;align-items:center">
+<div style="display:flex;flex-direction:column;gap:18px">
+<div style="font:600 12px/1 'JetBrains Mono',monospace;color:#FF5A1F">✓ TEST PAYMENT APPROVED · NO CHARGE MADE</div>
+<div style="font:900 clamp(40px,5vw,64px)/.92 'Archivo',sans-serif;font-stretch:125%;letter-spacing:-.03em">You're in, {{ firstName }}.</div>
+<p style="margin:0;font-size:17px;line-height:1.5;opacity:.85">Confirmation sent to {{ form.email }}. Packet pickup opens Apr 16 at Harbor Plaza.</p>
+<div style="display:flex;flex-direction:column;gap:8px;font:400 13px/1.4 'JetBrains Mono',monospace;opacity:.85">
+<span>CONFIRMATION · {{ confirmation }}</span><span>CHARGED (TEST) · ${{ totals.total }}</span><span>DONATION · ${{ totals.donation }} to Clearwater</span>
+</div>
+<button onClick="{{ reset }}" style="align-self:flex-start;border:2px solid #F3EFE6;background:transparent;color:#F3EFE6;cursor:pointer;font:700 15px/1 'Archivo',sans-serif;padding:14px 20px;border-radius:999px">Run another test transaction</button>
+</div>
+<div style="background:#F3EFE6;color:#10233A;border-radius:18px;padding:22px;aspect-ratio:4/3;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 20px 40px rgba(0,0,0,.3);transform:rotate(-2deg)">
+<div style="display:flex;justify-content:space-between;font:600 11px/1 'JetBrains Mono',monospace"><span>RIVERLINE RUN 2027</span><span style="background:#FF5A1F;padding:4px 8px;border-radius:4px">{{ selected.name }}</span></div>
+<div style="font:900 clamp(72px,10vw,120px)/.85 'Archivo',sans-serif;font-stretch:125%;text-align:center;letter-spacing:-.04em">{{ bib }}</div>
+<div style="display:flex;justify-content:space-between;font:600 11px/1 'JetBrains Mono',monospace"><span>{{ form.name }}</span><span>CORRAL {{ corral }} · {{ selected.start }}</span></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ notDone }}" hint-placeholder-val="{{ true }}">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:28px;align-items:start">
+<div style="display:flex;flex-direction:column;gap:30px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font:600 12px/1 'JetBrains Mono',monospace">01 · DISTANCE</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px">
+<sc-for list="{{ dists }}" as="d" hint-placeholder-count="4">
+<button onClick="{{ d.pickEntry }}" style="text-align:left;cursor:pointer;padding:16px;border-radius:16px;border:2px solid #10233A;background:{{ d.ckBg }};color:{{ d.ckFg }};display:flex;flex-direction:column;gap:10px">
+<span style="font:900 26px/1 'Archivo',sans-serif;font-stretch:125%">{{ d.name }}</span>
+<span style="font:600 13px/1 'JetBrains Mono',monospace">${{ d.price }}</span>
+<span style="font-size:12px;line-height:1.3;opacity:.8">{{ d.includes }}</span>
+</button>
+</sc-for>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font:600 12px/1 'JetBrains Mono',monospace">02 · JERSEY SIZE</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<sc-for list="{{ sizes }}" as="s" hint-placeholder-count="6">
+<button onClick="{{ s.pick }}" style="cursor:pointer;min-width:52px;height:48px;border-radius:12px;border:2px solid #10233A;font:700 15px/1 'Archivo',sans-serif;background:{{ s.bg }};color:{{ s.fg }}">{{ s.label }}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font:600 12px/1 'JetBrains Mono',monospace">03 · ADD A DONATION TO CLEARWATER</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<sc-for list="{{ donations }}" as="o" hint-placeholder-count="5">
+<button onClick="{{ o.pick }}" style="cursor:pointer;padding:0 18px;height:48px;border-radius:999px;border:2px solid #10233A;font:700 15px/1 'Archivo',sans-serif;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font:600 12px/1 'JetBrains Mono',monospace">04 · RUNNER</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+<label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600">Full name
+<input value="{{ form.name }}" onChange="{{ onName }}" placeholder="Alex Rivera" style="height:50px;border:2px solid #10233A;border-radius:12px;padding:0 14px;background:#FBF9F4;color:#10233A;font-size:16px">
+<sc-if value="{{ errors.name }}"><span style="color:#C2330A;font-weight:500">{{ errors.name }}</span></sc-if>
+</label>
+<label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600">Email
+<input value="{{ form.email }}" onChange="{{ onEmail }}" placeholder="alex@email.com" style="height:50px;border:2px solid #10233A;border-radius:12px;padding:0 14px;background:#FBF9F4;color:#10233A;font-size:16px">
+<sc-if value="{{ errors.email }}"><span style="color:#C2330A;font-weight:500">{{ errors.email }}</span></sc-if>
+</label>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+<div style="font:600 12px/1 'JetBrains Mono',monospace">05 · PAYMENT (TEST)</div>
+<div style="display:flex;gap:8px">
+<button onClick="{{ fillGood }}" style="cursor:pointer;border:1.5px dashed #10233A;background:transparent;color:#10233A;font:600 12px/1 'JetBrains Mono',monospace;padding:9px 12px;border-radius:999px">Fill success card</button>
+<button onClick="{{ fillBad }}" style="cursor:pointer;border:1.5px dashed #C2330A;background:transparent;color:#C2330A;font:600 12px/1 'JetBrains Mono',monospace;padding:9px 12px;border-radius:999px">Fill decline card</button>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:12px">
+<label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600">Card number
+<input value="{{ form.card }}" onChange="{{ onCard }}" placeholder="4242 4242 4242 4242" inputMode="numeric" style="height:50px;border:2px solid #10233A;border-radius:12px;padding:0 14px;background:#FBF9F4;color:#10233A;font:500 16px 'JetBrains Mono',monospace;min-width:0">
+</label>
+<label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600">Expiry
+<input value="{{ form.exp }}" onChange="{{ onExp }}" placeholder="MM/YY" style="height:50px;border:2px solid #10233A;border-radius:12px;padding:0 14px;background:#FBF9F4;color:#10233A;font:500 16px 'JetBrains Mono',monospace;min-width:0">
+</label>
+<label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600">CVC
+<input value="{{ form.cvc }}" onChange="{{ onCvc }}" placeholder="123" style="height:50px;border:2px solid #10233A;border-radius:12px;padding:0 14px;background:#FBF9F4;color:#10233A;font:500 16px 'JetBrains Mono',monospace;min-width:0">
+</label>
+</div>
+<sc-if value="{{ errors.card }}"><div style="background:#FBE3D9;color:#C2330A;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:600">{{ errors.card }}</div></sc-if>
+</div>
+</div>
+
+<aside style="position:sticky;top:20px;background:#10233A;color:#F3EFE6;border-radius:24px;padding:26px;display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 12px/1 'JetBrains Mono',monospace">ORDER SUMMARY</span><span style="font:600 10px/1 'JetBrains Mono',monospace;background:#FF5A1F;color:#10233A;padding:5px 8px;border-radius:4px">TEST</span></div>
+<div style="font:900 44px/.9 'Archivo',sans-serif;font-stretch:125%;letter-spacing:-.02em">{{ selected.full }}</div>
+<div style="display:flex;flex-direction:column;gap:10px;font-size:15px;border-top:1px solid #33506F;padding-top:16px">
+<div style="display:flex;justify-content:space-between"><span>Entry · {{ selected.name }}</span><span>${{ totals.entry }}</span></div>
+<div style="display:flex;justify-content:space-between;opacity:.75"><span>Race jersey · {{ size }}</span><span>Included</span></div>
+<div style="display:flex;justify-content:space-between;opacity:.75"><span>{{ selected.includes }}</span><span>Included</span></div>
+<div style="display:flex;justify-content:space-between"><span>Donation to Clearwater</span><span>${{ totals.donation }}</span></div>
+<div style="display:flex;justify-content:space-between;opacity:.75"><span>Processing fee</span><span>${{ totals.fee }}</span></div>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #33506F;padding-top:16px"><span style="font:600 12px/1 'JetBrains Mono',monospace">TOTAL</span><span style="font:900 40px/1 'Archivo',sans-serif;font-stretch:115%;color:#FF5A1F">${{ totals.total }}</span></div>
+<button onClick="{{ pay }}" style="cursor:pointer;border:0;height:58px;border-radius:999px;background:#FF5A1F;color:#10233A;font:800 17px/1 'Archivo',sans-serif;font-stretch:115%;letter-spacing:.02em;opacity:{{ payOpacity }}">{{ payLabel }}</button>
+<div style="font-size:12px;line-height:1.45;opacity:.7">Sandbox payment. No card is charged and no data leaves this page.</div>
+</aside>
+</div>
+</sc-if>
+</section>
+
+<footer style="background:#10233A;color:#F3EFE6">
+<div style="max-width:1240px;margin:0 auto;padding:40px 28px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font:400 13px/1.5 'JetBrains Mono',monospace">
+<span style="font:800 18px/1 'Archivo',sans-serif;font-stretch:125%">RIVERLINE RUN</span>
+<span style="opacity:.7">A Clearwater Collective event · Port Meridian · Apr 18, 2027</span>
+</div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;testBanner&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;defaultDistance&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;5k&quot;,&quot;10k&quot;,&quot;21k&quot;,&quot;42k&quot;],&quot;default&quot;:&quot;21k&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const DIST = [
+  { id:'5k', name:'5K', full:'5K Fun Run', km:'5.0', price:35, gain:'8 m', aid:'1', cutoff:'1h 15m', start:'9:30 AM', includes:'Medal',
+    medal:'Bronze river medal', medalLabel:'5K', ribbonH:'48px', medalSize:'120px', metal:'linear-gradient(135deg,#E3A774,#9C5B2E)', face:'#C9844E', faceInk:'#3A1E0A',
+    blurb:'A flat loop around Harbor Plaza and the old ferry docks. Strollers, walkers and dogs on leashes welcome.',
+    path:'M300 228 L360 250 C400 262 420 300 400 330 L330 340 C290 344 270 300 300 228 Z',
+    elev:[4,4,5,6,6,7,8,8,7,6,6,5,5,4,4],
+    highlights:[{at:'KM 1',text:'Ferry Docks boardwalk'},{at:'KM 3',text:'Water station + DJ booth'},{at:'KM 5',text:'Finish chute at Harbor Plaza'}] },
+  { id:'10k', name:'10K', full:'10K River Loop', km:'10.0', price:45, gain:'22 m', aid:'2', cutoff:'1h 45m', start:'8:45 AM', includes:'Medal',
+    medal:'Silver river medal', medalLabel:'10K', ribbonH:'56px', medalSize:'134px', metal:'linear-gradient(135deg,#F1F3F5,#9AA4AE)', face:'#C7CED5', faceInk:'#10233A',
+    blurb:'Crosses the river once at Salt Street Bridge and loops back through Dockside Park on shaded paths.',
+    path:'M300 228 C360 250 440 250 480 290 C510 320 480 370 420 370 L300 360 C240 354 220 300 240 260 C252 236 280 226 300 228 Z',
+    elev:[4,5,8,12,18,22,18,12,9,8,10,12,9,6,4],
+    highlights:[{at:'KM 2',text:'Salt Street Bridge crossing'},{at:'KM 6',text:'Dockside Park shade trail'},{at:'KM 9',text:'Cheer zone by Clearwater volunteers'}] },
+  { id:'21k', name:'Half', full:'Half Marathon', km:'21.1', price:75, gain:'64 m', aid:'5', cutoff:'3h 30m', start:'7:30 AM', includes:'Medal + finisher shirt',
+    medal:'Gold medal + finisher shirt', medalLabel:'21.1', ribbonH:'64px', medalSize:'150px', metal:'linear-gradient(135deg,#FFE08A,#C08A1E)', face:'#E5B341', faceInk:'#3A2800',
+    blurb:'Both banks of the Meridian: out along the north shore to Heron Point, back across Salt Street Bridge to the plaza.',
+    path:'M300 228 C220 214 160 160 100 130 C60 110 40 70 80 50 C130 30 200 60 240 100 C280 140 340 150 400 170 C470 196 540 230 560 290 C575 340 520 380 460 370 C400 360 360 300 300 228 Z',
+    elev:[4,8,14,22,30,38,34,26,18,22,30,40,32,20,12,8,6,4],
+    highlights:[{at:'KM 4',text:'Heron Point overlook'},{at:'KM 11',text:'Restored wetlands — Clearwater project site'},{at:'KM 17',text:'Salt Street Bridge'}] },
+  { id:'42k', name:'Full', full:'Full Marathon', km:'42.2', price:95, gain:'148 m', aid:'10', cutoff:'6h 30m', start:'6:45 AM', includes:'Medal + finisher shirt',
+    medal:'Enamel gold medal + finisher shirt', medalLabel:'42.2', ribbonH:'72px', medalSize:'168px', metal:'linear-gradient(135deg,#FFE08A,#B07A12)', face:'#10233A', faceInk:'#FF5A1F',
+    blurb:'The whole river. Two bridges, Heron Point, the reservoir climb and a long riverside run home to Harbor Plaza.',
+    path:'M300 228 C220 214 160 170 90 140 C40 118 20 60 70 36 C140 10 230 40 280 80 C330 120 420 110 480 120 C550 132 590 190 580 250 C572 310 590 360 540 395 C480 430 380 410 320 390 C250 368 160 380 110 340 C70 306 120 270 180 262 C230 256 270 246 300 228 Z',
+    elev:[4,10,18,26,34,30,24,30,44,58,72,80,66,50,38,30,26,34,40,30,20,14,10,6,4],
+    highlights:[{at:'KM 9',text:'Heron Point overlook'},{at:'KM 22',text:'Reservoir climb — the only real hill'},{at:'KM 35',text:'Riverside mile of signs from families'}] },
+];
+const SIZES = ['XS','S','M','L','XL','XXL'];
+const DONS = [0,10,25,50,100];
+
+class Component extends DCLogic {
+  state = { route: null, dist: null, size:'M', donation:10, form:{name:'',email:'',card:'',exp:'',cvc:''}, errors:{}, step:'form', bib:'', confirmation:'' };
+  set(k, v) { this.setState(s => ({ form: { ...s.form, [k]: v }, errors: { ...s.errors, [k === 'exp' || k === 'cvc' ? 'card' : k]: null } })); }
+  totals(d) {
+    const fee = Math.round((d.price + this.state.donation) * 0.025 * 100) / 100;
+    return { entry: d.price.toFixed(2), donation: this.state.donation.toFixed(2), fee: fee.toFixed(2), total: (d.price + this.state.donation + fee).toFixed(2) };
+  }
+  pay = () => {
+    if (this.state.step === 'processing') return;
+    const f = this.state.form, e = {};
+    const digits = f.card.replace(/\D/g, '');
+    if (!f.name.trim()) e.name = 'Enter your name as it should appear on your bib.';
+    if (!/^\S+@\S+\.\S+$/.test(f.email)) e.email = 'Enter a valid email.';
+    if (digits.length !== 16 || !/^\d\d\/\d\d$/.test(f.exp) || !/^\d{3,4}$/.test(f.cvc)) e.card = 'Check card details — use a test card above.';
+    if (Object.keys(e).length) return this.setState({ errors: e });
+    this.setState({ step: 'processing', errors: {} });
+    setTimeout(() => {
+      if (digits === '4000000000000002') return this.setState({ step: 'form', errors: { card: 'Card declined (test decline card 4000 0000 0000 0002). Try 4242 4242 4242 4242.' } });
+      if (digits !== '4242424242424242') return this.setState({ step: 'form', errors: { card: 'Only test cards are accepted in sandbox mode.' } });
+      this.setState({ step: 'done', bib: String(1000 + Math.floor(Math.random() * 8999)), confirmation: 'RL-TEST-' + Math.random().toString(36).slice(2, 8).toUpperCase() });
+    }, 1400);
+  };
+  renderVals() {
+    const def = this.props.defaultDistance ?? '21k';
+    const routeId = this.state.route ?? def, distId = this.state.dist ?? def;
+    const route = DIST.find(d => d.id === routeId), selected = DIST.find(d => d.id === distId);
+    const pts = route.elev.map((v, i) => `${(i / (route.elev.length - 1) * 600).toFixed(1)},${(112 - v * 1.25).toFixed(1)}`);
+    const step = this.state.step;
+    return {
+      showBanner: this.props.testBanner ?? true,
+      dists: DIST.map(d => ({ ...d,
+        tabBg: d.id === routeId ? '#FF5A1F' : 'transparent', tabFg: d.id === routeId ? '#10233A' : '#F3EFE6',
+        ckBg: d.id === distId ? '#10233A' : 'transparent', ckFg: d.id === distId ? '#F3EFE6' : '#10233A',
+        pickRoute: () => this.setState({ route: d.id }), pickEntry: () => this.setState({ dist: d.id }) })),
+      route, elevLine: pts.join(' '), elevArea: `0,120 ${pts.join(' ')} 600,120`,
+      selected, size: this.state.size,
+      sizes: SIZES.map(s => ({ label: s, bg: s === this.state.size ? '#10233A' : 'transparent', fg: s === this.state.size ? '#F3EFE6' : '#10233A', pick: () => this.setState({ size: s }) })),
+      donations: DONS.map(v => ({ label: v ? '$' + v : 'No thanks', bg: v === this.state.donation ? '#FF5A1F' : 'transparent', fg: '#10233A', pick: () => this.setState({ donation: v }) })),
+      form: this.state.form, errors: this.state.errors,
+      onName: e => this.set('name', e.target.value),
+      onEmail: e => this.set('email', e.target.value),
+      onCard: e => this.set('card', e.target.value.replace(/\D/g, '').slice(0, 16).replace(/(\d{4})(?=\d)/g, '$1 ')),
+      onExp: e => { let v = e.target.value.replace(/\D/g, '').slice(0, 4); if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2); this.set('exp', v); },
+      onCvc: e => this.set('cvc', e.target.value.replace(/\D/g, '').slice(0, 4)),
+      fillGood: () => this.setState(s => ({ form: { ...s.form, card: '4242 4242 4242 4242', exp: '12/29', cvc: '123' }, errors: { ...s.errors, card: null } })),
+      fillBad: () => this.setState(s => ({ form: { ...s.form, card: '4000 0000 0000 0002', exp: '12/29', cvc: '123' }, errors: { ...s.errors, card: null } })),
+      totals: this.totals(selected), pay: this.pay,
+      payLabel: step === 'processing' ? 'PROCESSING TEST PAYMENT…' : `PAY $${this.totals(selected).total} (TEST)`,
+      payOpacity: step === 'processing' ? 0.6 : 1,
+      isDone: step === 'done', notDone: step !== 'done',
+      firstName: this.state.form.name.trim().split(' ')[0],
+      bib: this.state.bib, confirmation: this.state.confirmation,
+      corral: { '5k': 'D', '10k': 'C', '21k': 'B', '42k': 'A' }[selected.id],
+      reset: () => this.setState({ step: 'form', form: { name: '', email: '', card: '', exp: '', cvc: '' }, errors: {} }),
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -12,6 +12,7 @@ event takes place.
 | --------------------------------------------------- | ---------------------------------------------------------- |
 | [`apps/web`](apps/web) (`@rr/web`)                  | Next.js runner site: placeholder page and `/api/health`    |
 | [`packages/env`](packages/env) (`@rr/env`)          | `createEnv`: zod-validated, fail-fast environment loading  |
+| [`packages/email`](packages/email) (`@rr/email`)    | Resend + React Email: the post-payment confirmation email  |
 | [`packages/config`](packages/config) (`@rr/config`) | Shared tsconfig, ESLint flat config and Prettier config    |
 
 Stack: Next.js 16, React 19, Tailwind v4, Vitest, pnpm + Turborepo, Vercel (`sin1`).
