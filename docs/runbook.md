@@ -63,11 +63,14 @@ the owner, from a laptop, and never from CI or Vercel.
    # ERROR:  permission denied for table registrations
    ```
 
+6. **Once per Neon branch, after migration `0003`:** create the dashboard's login role the same
+   way. See **Organizer dashboard** below.
+
 New schema changes: edit `packages/db/src/schema/`, then
 `pnpm --filter @rr/db db:generate --name <name>` and commit the SQL and `meta/`. Changes are
 expand/contract: add first, deploy the code that uses it, and remove the old shape in a later
 migration. An applied migration is never edited. A new table needs its own `GRANT` to `rr_app`
-in the migration.
+(and to `rr_admin`, if the dashboard reads it) in the migration.
 
 ## Payments (PayMongo test mode)
 
@@ -249,6 +252,80 @@ payment: nothing was charged".
   Resend → Emails shows one send for the reference. Reload `/register/success` and resend the
   webhook event: still one email.
 
+## Organizer dashboard (apps/admin)
+
+A separate Next.js app with its own Vercel project and URL. It signs organizers in with Better Auth
+(email and password, no sign-up) and holds the only login secrets. The public site has none, and
+its database role can't read the auth tables.
+
+- **Vercel project (once).** A second project on the same repo: root directory `apps/admin`,
+  framework Next.js, production branch `main`, "Include files outside the root directory" on.
+  `apps/admin/vercel.json` builds with `turbo run build --filter=@rr/admin` and pins `sin1`.
+  The build needs no environment variables.
+- **Database role (once per Neon branch, after migration `0003`).** As the owner, with SQL (not
+  the Neon Console):
+  ```sql
+  -- password: openssl rand -base64 32
+  CREATE ROLE rr_admin_login LOGIN PASSWORD '<password>' IN ROLE rr_admin;
+  ```
+  `rr_admin` may only `SELECT` from `registrations`, plus read and write the Better Auth tables
+  (`auth_*`). It has no DDL. Check it:
+  ```sh
+  psql "$ADMIN_DATABASE_URL" -c "DELETE FROM registrations WHERE false"
+  # ERROR:  permission denied for table registrations
+  ```
+- **Accounts.** There is no sign-up endpoint, so the two accounts come from the seed. In
+  `packages/db/.env` (see `.env.example`), next to `MIGRATE_DATABASE_URL`, set
+  `ORGANIZER_OWNER_EMAIL` / `ORGANIZER_OWNER_PASSWORD` (from your password manager, 16+
+  characters) and `DEMO_VIEWER_EMAIL` / `DEMO_VIEWER_PASSWORD` (`openssl rand -base64 24`). Then
+  run, once per Neon branch:
+  ```sh
+  pnpm --filter @rr/db seed:organizers
+  ```
+  It upserts both accounts by email. Re-running it resets both passwords and signs both accounts
+  out everywhere. That is also how to rotate a password.
+- **Env (admin project only, Production).** `DATABASE_URL` (the pooled `rr_admin_login` URL of
+  `main`), `BETTER_AUTH_SECRET` (`openssl rand -base64 32`), `BETTER_AUTH_URL` (the dashboard's
+  origin, no trailing slash) and `DEMO_VIEWER_EMAIL` / `DEMO_VIEWER_PASSWORD` (the same values as
+  the seed). Then redeploy. For Preview, use the `dev` branch's `rr_admin_login` URL. Locally,
+  copy `apps/admin/.env.example` to `apps/admin/.env.local`. Without the demo variables, the demo
+  button is disabled. Changing `BETTER_AUTH_SECRET` signs everyone out.
+- **How access works.** `proxy.ts` sends visitors with no session cookie to `/login`. That is only
+  a fast path: the dashboard layout and every page and data function call `requireSession()`,
+  which looks the session up in the database. Sessions last 12 hours. The owner sees full data and
+  the viewer (the demo) sees it masked. Neither role can create users, change roles or
+  impersonate.
+- **Sign-in and rate limiting.** The password form and the "Explore the organizer demo" button
+  are server actions. They go through Better Auth's router, which allows 5 sign-in attempts per
+  minute per IP (the IP comes from Vercel's `x-forwarded-for`). The counts live in
+  `auth_rate_limits`, so every instance shares them. The demo password stays on the server: the
+  button's form posts no fields. `/api/auth/*` forwards only `GET /get-session`,
+  `POST /sign-in/email` and `POST /sign-out`. Everything else, sign-up included, gets 404.
+- **Personal data.** Sessions store no IP address or user agent. `auth_rate_limits` keeps
+  `<ip>|<path>` for the length of a window, and stale rows are pruned on later sign-ins.
+  `DELETE FROM auth_rate_limits;` clears them at any time.
+- **Logs** carry reasons and error classes, never an email address or password:
+  - `auth.sign_in_rejected` with `reason` `invalid_credentials` or `rate_limited`.
+  - `auth.sign_in_failed`: the database or env failed (the error class, or `EnvValidationError`
+    naming the variable). The visitor sees "Sign-in isn't available right now".
+  - `auth.demo_unavailable` with `reason` `env_missing` (set the demo variables and redeploy) or
+    `credentials_rejected` (the env and the seed disagree: re-run `seed:organizers` with the same
+    values).
+  - `auth.warn` / `auth.error`: Better Auth's own messages. Query parameters and email addresses
+    are redacted.
+- **Check it** (production):
+  ```sh
+  curl -sI https://<admin-domain>/ | grep -iE '^HTTP|^location'          # 307, location: /login
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<admin-domain>/api/auth/sign-up/email \
+    -H 'content-type: application/json' -d '{}'                           # 404
+  for i in 1 2 3 4 5 6; do curl -s -o /dev/null -w '%{http_code} ' -X POST \
+    https://<admin-domain>/api/auth/sign-in/email -H 'content-type: application/json' \
+    -d '{"email":"nobody@example.com","password":"wrong-password"}'; done  # 401 ×5, then 429
+  ```
+  The last check locks your IP out of sign-in for a minute. Then open the dashboard and click
+  **Explore the organizer demo**: the header says `VIEWER`. Sign out, then sign in with the owner
+  account: the header says `OWNER`.
+
 ## Roll back
 
 - **App:** Vercel dashboard → Deployments → the last good production deploy → **Instant
@@ -258,7 +335,7 @@ payment: nothing was charged".
   first, then fix forward with a new migration.
 - **Data:** Neon Console → the branch → **Restore** to a point in time inside the plan's history
   window. Restore `dev` first to check the result. A restore also rewinds the roles, so re-check
-  `rr_app_login` afterwards.
+  `rr_app_login` and `rr_admin_login` afterwards.
 
 ## Env var changes
 
