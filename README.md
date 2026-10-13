@@ -11,6 +11,7 @@ event takes place.
 | Package                                             | Role                                                       |
 | --------------------------------------------------- | ---------------------------------------------------------- |
 | [`apps/web`](apps/web) (`@rr/web`)                  | Next.js runner site: placeholder page and `/api/health`    |
+| [`apps/admin`](apps/admin) (`@rr/admin`)            | Organizer dashboard: Better Auth sign-in and the demo view |
 | [`packages/env`](packages/env) (`@rr/env`)          | `createEnv`: zod-validated, fail-fast environment loading  |
 | [`packages/email`](packages/email) (`@rr/email`)    | Resend + React Email: the post-payment confirmation email  |
 | [`packages/config`](packages/config) (`@rr/config`) | Shared tsconfig, ESLint flat config and Prettier config    |
@@ -25,6 +26,7 @@ Requirements: Node 24 (`nvm use`) and pnpm 10 (`corepack enable`).
 pnpm install
 pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build
 pnpm --filter @rr/web dev   # http://localhost:3000
+pnpm --filter @rr/admin dev # http://localhost:3001
 ```
 
 The build needs no environment variables.

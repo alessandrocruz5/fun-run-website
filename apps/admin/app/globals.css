@@ -1,0 +1,59 @@
+@import "tailwindcss";
+@import "@rr/ui/tokens.css";
+
+/* No admin mockups yet: the dashboard reuses the runner site's tokens (@rr/ui) and its banner and
+   input styles (apps/web/app/globals.css). */
+
+@layer base {
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+  }
+  :focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .mono {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 1;
+  }
+  .disp {
+    font-family: var(--font-display);
+    font-stretch: 125%;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    margin: 0;
+  }
+  .banner {
+    background: var(--color-accent);
+    color: var(--color-ink);
+    padding: 9px 20px;
+    text-align: center;
+  }
+  .input {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .input input {
+    height: 50px;
+    min-width: 0;
+    padding: 0 14px;
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-input);
+    background: var(--color-field);
+    color: var(--color-ink);
+    font: 400 16px var(--font-sans);
+  }
+}
