@@ -9,6 +9,7 @@ Drizzle schema, migrations and registration steps for Riverline Run, on Neon Pos
 | `@rr/db/races`  | `RACES` (5K/10K/21K/42K: price in centavos, gun time). No imports: safe in client components. |
 | `@rr/db/schema` | Drizzle tables and enums, including Better Auth's `auth_*` tables (`authSchema`). |
 | `@rr/db`        | All of the above, plus `getDb()` and the registration steps.                 |
+| `@rr/db/admin`  | The dashboard's read-only queries: `getOverview(db)` (paid-only totals) and `listRegistrations(db, role, filters)`. Personal data is masked by role in the SQL. |
 | `@rr/db/seed-organizers` | `seedOrganizers(db, accounts)`, the dashboard's two accounts. Run as a script; tests import it. |
 
 `getDb()` reads `DATABASE_URL` on first use, never at import, so `next build` needs no env. Every
@@ -53,6 +54,7 @@ pnpm --filter @rr/db test                      # PGlite: migrations, steps, gran
 pnpm --filter @rr/db db:generate --name <name> # new migration from schema changes
 pnpm --filter @rr/db db:migrate                # apply to MIGRATE_DATABASE_URL (laptop only)
 pnpm --filter @rr/db seed:organizers           # owner + demo viewer accounts (laptop only)
+ALLOW_DEMO_SEED=1 pnpm --filter @rr/db seed:registrations  # replace ALL registrations with 300 demo rows
 ```
 
 Migrations are expand/contract. Never edit a migration that has been applied.

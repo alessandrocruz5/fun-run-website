@@ -13,7 +13,7 @@ export default function PrivacyPage() {
 
   return (
     <main className="wrap prose">
-      <p className="mono">LAST UPDATED · 9 OCTOBER 2026</p>
+      <p className="mono">LAST UPDATED · 14 OCTOBER 2026</p>
       <h1 className="disp">Privacy notice</h1>
       <p>
         {SITE.name} is a <strong>fictional</strong> fun run by the fictional {SITE.organizer}. This
@@ -80,6 +80,27 @@ export default function PrivacyPage() {
         Some of these providers process data outside the Philippines. We don&apos;t put your
         personal data in application logs, error messages or PayMongo metadata. What you type on
         PayMongo&apos;s checkout page goes to PayMongo directly.
+      </p>
+
+      <h2>Who can see your registration</h2>
+      <p>
+        Registrations are shown on a separate organizer dashboard, which has no sign-up. The
+        organizer&apos;s own account sees them in full. A public demo account lets anyone explore
+        the dashboard: it sees your name, booking reference, race, shirt size, payment status,
+        amount and when you registered, but your email address and mobile number are masked (only
+        the first letter and domain of your email and the last two digits of your number show), and
+        your birthdate and emergency contact are hidden. The masking is done by the database, so the
+        full details never reach a demo visitor&apos;s browser, and a demo search matches only names
+        and booking references. The demo also sees totals of paid runners: per race, per day, by
+        shirt size and by age group (an age band such as 30–39, not your birthdate).
+      </p>
+      <p>
+        Demo visitors share one account. The dashboard doesn&apos;t record their IP address or
+        browser with the session. To limit sign-in attempts, it counts attempts per IP address over
+        one-minute windows; those entries are removed by later sign-ins, and at the latest by the
+        weekly reset, so none is kept longer than {SITE.retentionDays} days. A search typed on the
+        dashboard is part of the page address, so it can appear in that browser&apos;s history and
+        in Vercel&apos;s request logs.
       </p>
 
       <h2>How long we keep it</h2>
