@@ -17,5 +17,7 @@ describe("GET /organizer", () => {
     expect(() => GET()).toThrow(/ADMIN_URL/);
     vi.stubEnv("ADMIN_URL", "not a url");
     expect(() => GET()).toThrow(/ADMIN_URL/);
+    vi.stubEnv("ADMIN_URL", "javascript:alert(1)");
+    expect(() => GET()).toThrow(/ADMIN_URL/);
   });
 });

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 const adminEnvSchema = baseEnvSchema.extend({
   /** The organizer dashboard's public origin, e.g. `https://riverline-run-admin.vercel.app`. */
-  ADMIN_URL: z.url(),
+  ADMIN_URL: z.url({ protocol: /^https?$/ }),
 });
 
 /**
