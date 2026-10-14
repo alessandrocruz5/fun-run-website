@@ -3,6 +3,22 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A version is added when its
 sprint (MINOR) or hotfix (PATCH) ships.
 
+## [0.2.0] — 2026-10-14
+
+Sprint 2 — Clearwater organizer dashboard (epic FRW-9).
+
+### Added
+
+- Separate organizer app (`apps/admin`, its own Vercel project) with Better Auth sign-in, owner and
+  viewer roles, no sign-up, and a demo button that signs in as the masked viewer (FRW-10).
+- Dashboard overview (paid runners, gross, fees and net per race, abandoned checkouts, registrations
+  per day, age groups, shirt sizes) and a searchable, filterable registrations list. A viewer's
+  email and mobile are masked by the database query, and their birthdate and emergency contact
+  are hidden (FRW-11).
+- Registration detail page, CSV export of the current filtered view (masked for the viewer, login
+  checked on the route, formula cells escaped, never cached), and "See it from the organizer's
+  side" links on the runner site's success page and footer (FRW-12).
+
 ## [0.1.0] — 2026-10-09
 
 Sprint 1 — Runner site, registration and test payments (epic FRW-1).
