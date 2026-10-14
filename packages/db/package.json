@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./admin": "./src/admin/queries.ts",
     "./races": "./src/races.ts",
     "./schema": "./src/schema/index.ts",
     "./seed-organizers": "./src/seed-organizers.ts"
@@ -15,7 +16,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "seed:organizers": "tsx src/seed-organizers.ts"
+    "seed:organizers": "tsx src/seed-organizers.ts",
+    "seed:registrations": "tsx src/seed-registrations.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
