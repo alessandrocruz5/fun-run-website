@@ -87,12 +87,15 @@ export default function PrivacyPage() {
         Registrations are shown on a separate organizer dashboard, which has no sign-up. The
         organizer&apos;s own account sees them in full. A public demo account lets anyone explore
         the dashboard: it sees your name, booking reference, race, shirt size, payment status,
-        amount and when you registered, but your email address and mobile number are masked (only
-        the first letter and domain of your email and the last two digits of your number show), and
-        your birthdate and emergency contact are hidden. The masking is done by the database, so the
-        full details never reach a demo visitor&apos;s browser, and a demo search matches only names
-        and booking references. The demo also sees totals of paid runners: per race, per day, by
-        shirt size and by age group (an age band such as 30–39, not your birthdate).
+        amount, payment method, fee, PayMongo payment ID, when you registered, agreed to this notice
+        and paid, and whether your confirmation email was sent, but your email address and mobile
+        number are masked (only the first letter and domain of your email and the last two digits of
+        your number show), and your birthdate and emergency contact are hidden. The masking is done
+        by the database, so the full details never reach a demo visitor&apos;s browser, and a demo
+        search matches only names and booking references. The dashboard can export the list as a CSV
+        file, with the same masking, which a demo visitor can save to their device. The demo also
+        sees totals of paid runners: per race, per day, by shirt size and by age group (an age band
+        such as 30–39, not your birthdate).
       </p>
       <p>
         Demo visitors share one account. The dashboard doesn&apos;t record their IP address or

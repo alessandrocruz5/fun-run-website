@@ -18,6 +18,7 @@ import {
   AGE_GROUPS,
   DAILY_WINDOW_DAYS,
   getOverview,
+  getRegistration,
   listRegistrations,
   localDay,
   SHIRT_SIZES,
@@ -338,6 +339,60 @@ describe("listRegistrations", () => {
   it("returns an empty first page when nothing matches", async () => {
     const result = await listRegistrations(db, "viewer", { q: "no such runner" });
     expect(result).toEqual({ rows: [], total: 0, page: 1, pageCount: 1, pageSize: 25 });
+  });
+});
+
+describe("getRegistration", () => {
+  const paid = seed.find((x) => x.status === "paid")!;
+  let reference: string;
+
+  beforeAll(async () => {
+    const rows = await ownerQuery<{ reference: string }>(
+      `select reference from registrations where email = '${paid.email}'`,
+    );
+    reference = rows[0]!.reference;
+  });
+
+  it("returns the owner the raw personal data, payment and consent", async () => {
+    const detail = await getRegistration(db, "owner", reference);
+    expect(detail).toMatchObject({
+      reference,
+      email: paid.email,
+      mobile: paid.mobile,
+      birthdate: paid.birthdate,
+      emergencyContactName: paid.emergencyContactName,
+      emergencyContactMobile: paid.emergencyContactMobile,
+      status: "paid",
+      paymentId: paid.paymentId,
+      paymentMethod: paid.paymentMethod,
+      feeCentavos: paid.feeCentavos,
+      netCentavos: paid.netCentavos,
+    });
+    expect(detail?.consentAt).toBeInstanceOf(Date);
+    expect(detail?.paidAt).toBeInstanceOf(Date);
+  });
+
+  it("never returns a viewer a raw email, mobile, birthdate or emergency contact", async () => {
+    const detail = await getRegistration(db, "viewer", reference);
+    expect(detail?.email).toMatch(/^[a-z]•••@example\.com$/);
+    expect(detail?.mobile).toMatch(/^•••\d\d$/);
+    expect(detail?.birthdate).toBeNull();
+    expect(detail?.emergencyContactName).toBeNull();
+    expect(detail?.emergencyContactMobile).toBeNull();
+    const returned = JSON.stringify(detail);
+    for (const field of [
+      "email",
+      "mobile",
+      "birthdate",
+      "emergencyContactName",
+      "emergencyContactMobile",
+    ] as const) {
+      expect(returned).not.toContain(String(paid[field]));
+    }
+  });
+
+  it("returns null for an unknown reference", async () => {
+    expect(await getRegistration(db, "owner", "RR-NOSUCH00")).toBeNull();
   });
 });
 

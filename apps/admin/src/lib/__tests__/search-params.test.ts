@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_LIST_PARAMS,
+  exportHref,
   hasFilters,
   listHref,
   parseListParams,
@@ -105,5 +106,16 @@ describe("sortHref", () => {
     expect(sortHref(parseListParams({ sort: "created", dir: "asc" }), "created")).toBe(
       "/registrations",
     );
+  });
+});
+
+describe("exportHref", () => {
+  it("is the plain export when nothing narrows the list", () => {
+    expect(exportHref(DEFAULT_LIST_PARAMS)).toBe("/registrations/export");
+  });
+
+  it("carries the search, filters and sort, but not the page", () => {
+    const params = parseListParams({ q: "dela cruz", race: "5k", sort: "name", page: "4" });
+    expect(exportHref(params)).toBe("/registrations/export?q=dela+cruz&race=5k&sort=name&dir=desc");
   });
 });

@@ -6,7 +6,7 @@ import {
 } from "@rr/db/admin";
 import { RACES } from "@rr/db/races";
 import Link from "next/link";
-import { type ListParams, sortHref } from "@/lib/search-params";
+import { LIST_PATH, type ListParams, sortHref } from "@/lib/search-params";
 import { formatPeso } from "./stat-card";
 
 const registeredAt = new Intl.DateTimeFormat("en-PH", {
@@ -30,6 +30,14 @@ function Status({ status }: { status: RegistrationStatus }) {
     >
       {status}
     </span>
+  );
+}
+
+function ReferenceLink({ reference }: { reference: string }) {
+  return (
+    <Link href={`${LIST_PATH}/${reference}`} className="underline underline-offset-4">
+      {reference}
+    </Link>
   );
 }
 
@@ -83,7 +91,9 @@ export function RegistrationsTable({
                 <p className="m-0 font-semibold break-words">
                   {row.firstName} {row.lastName}
                 </p>
-                <p className="mono m-0 mt-1.5 text-line">{row.reference}</p>
+                <p className="mono m-0 mt-1.5">
+                  <ReferenceLink reference={row.reference} />
+                </p>
               </div>
               <Status status={row.status} />
             </div>
@@ -130,7 +140,9 @@ export function RegistrationsTable({
                   <span className="font-semibold">
                     {row.firstName} {row.lastName}
                   </span>
-                  <span className="mono mt-1.5 block text-line">{row.reference}</span>
+                  <span className="mono mt-1.5 block">
+                    <ReferenceLink reference={row.reference} />
+                  </span>
                 </td>
                 <td className="py-3 pr-4">
                   <span className="block break-all">{row.email}</span>

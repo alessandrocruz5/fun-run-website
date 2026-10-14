@@ -345,6 +345,15 @@ its database role can't read the auth tables.
   an address is registered). The viewer's birthdate and emergency contact come back null. The
   search term is in the URL (`?q=`), so a name, or an owner's email or mobile search, can appear
   in Vercel's request logs and browser history; `/privacy` says so. Our own logs never carry it.
+- **Detail page and CSV export.** `/registrations/<reference>` shows one registration, masked the
+  same way as the list. `/registrations/export` downloads the list as CSV with the page's search,
+  filters and sort (every match, not one page), masked the same way. It checks the login itself
+  and answers `Cache-Control: no-store`. Cells starting `=`, `+`, `-` or `@` get a leading `'` so a
+  spreadsheet doesn't run them as formulas.
+- **Demo links on the runner site.** The footer and the success page link to `/organizer` on the
+  site, which redirects to `ADMIN_URL` (the dashboard's origin, no trailing slash). Set it in the
+  **site's** Vercel project (Production and Preview), then redeploy. It is the only dashboard
+  detail the public site holds. Without it, only that link returns 500.
 
 ## Roll back
 

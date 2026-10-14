@@ -1,5 +1,6 @@
 import { getDb } from "@rr/db";
 import { listRegistrations } from "@rr/db/admin";
+import { ButtonLink } from "@rr/ui";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Filters } from "@/components/filters";
@@ -7,7 +8,13 @@ import { Pagination } from "@/components/pagination";
 import { RegistrationsTable } from "@/components/registrations-table";
 import { canSeePersonalData } from "@/lib/auth/roles";
 import { requireSession } from "@/lib/auth/session";
-import { hasFilters, LIST_PATH, parseListParams, type SearchParams } from "@/lib/search-params";
+import {
+  exportHref,
+  hasFilters,
+  LIST_PATH,
+  parseListParams,
+  type SearchParams,
+} from "@/lib/search-params";
 
 export const metadata: Metadata = { title: "Registrations" };
 
@@ -66,6 +73,14 @@ export default async function RegistrationsPage({
         </div>
       ) : (
         <>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="m-0 text-sm">
+              {hasFilters(params) ? "The CSV holds every match, not only this page." : null}
+            </p>
+            <ButtonLink href={exportHref(params)} variant="outline" size="sm">
+              Export CSV
+            </ButtonLink>
+          </div>
           <RegistrationsTable rows={list.rows} params={shown} />
           <Pagination
             params={shown}
