@@ -29,6 +29,7 @@ export type ListParams = {
 };
 
 export const LIST_PATH = "/registrations";
+export const EXPORT_PATH = `${LIST_PATH}/export`;
 
 export const DEFAULT_LIST_PARAMS: ListParams = {
   q: "",
@@ -91,6 +92,12 @@ export function listHref(params: ListParams, patch: Partial<ListParams> = {}): s
   if (next.page > 1) query.set("page", String(next.page));
   const search = query.toString();
   return search ? `${LIST_PATH}?${search}` : LIST_PATH;
+}
+
+/** The CSV export of the same search, filters and sort (not the page). */
+export function exportHref(params: ListParams): string {
+  const query = listHref(params, { page: 1 }).split("?")[1];
+  return query ? `${EXPORT_PATH}?${query}` : EXPORT_PATH;
 }
 
 /** The link behind a column header: flips the direction of the current sort, else its default. */

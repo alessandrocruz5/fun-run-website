@@ -15,6 +15,7 @@ export function Footer() {
             in test mode only.
           </span>
           <Link href="/privacy">Privacy notice</Link>
+          <a href="/organizer">See it from the organizer&apos;s side</a>
         </div>
       </div>
     </footer>

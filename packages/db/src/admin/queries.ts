@@ -277,3 +277,35 @@ export async function listRegistrations(
 
 export type RegistrationList = Awaited<ReturnType<typeof listRegistrations>>;
 export type RegistrationListRow = RegistrationList["rows"][number];
+
+/**
+ * One registration for the detail page, or null. Like the list, a viewer gets email and mobile
+ * masked by Postgres, and a null birthdate and emergency contact.
+ */
+export async function getRegistration(db: Db, role: OrganizerRole, reference: string) {
+  const [row] = await db
+    .select({
+      reference: r.reference,
+      race: r.race,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      ...personalDataColumns(role),
+      shirtSize: r.shirtSize,
+      consentAt: r.consentAt,
+      status: r.status,
+      amountCentavos: r.amountCentavos,
+      feeCentavos: r.feeCentavos,
+      netCentavos: r.netCentavos,
+      paymentMethod: r.paymentMethod,
+      paymentId: r.paymentId,
+      paidAt: r.paidAt,
+      confirmationSentAt: r.confirmationSentAt,
+      createdAt: r.createdAt,
+    })
+    .from(r)
+    .where(eq(r.reference, reference))
+    .limit(1);
+  return row ?? null;
+}
+
+export type RegistrationDetail = NonNullable<Awaited<ReturnType<typeof getRegistration>>>;
