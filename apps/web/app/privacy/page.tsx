@@ -91,13 +91,16 @@ export default function PrivacyPage() {
         the first letter and domain of your email and the last two digits of your number show), and
         your birthdate and emergency contact are hidden. The masking is done by the database, so the
         full details never reach a demo visitor&apos;s browser, and a demo search matches only names
-        and booking references.
+        and booking references. The demo also sees totals of paid runners: per race, per day, by
+        shirt size and by age group (an age band such as 30–39, not your birthdate).
       </p>
       <p>
         Demo visitors share one account. The dashboard doesn&apos;t record their IP address or
-        browser with the session. To limit sign-in attempts, it keeps the visitor&apos;s IP address
-        with the sign-in path for a one-minute window. Old entries are removed by later sign-ins and
-        by the weekly reset.
+        browser with the session. To limit sign-in attempts, it counts attempts per IP address over
+        one-minute windows; those entries are removed by later sign-ins, and at the latest by the
+        weekly reset, so none is kept longer than {SITE.retentionDays} days. A search typed on the
+        dashboard is part of the page address, so it can appear in that browser&apos;s history and
+        in Vercel&apos;s request logs.
       </p>
 
       <h2>How long we keep it</h2>

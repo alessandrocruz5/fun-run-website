@@ -6,9 +6,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "../../client";
 import { RACE_IDS, RACES } from "../../races";
 import * as schema from "../../schema";
+import { registrations } from "../../schema";
 import {
   assertDemoSeedAllowed,
   buildDemoRegistrations,
+  DEMO_MOBILE_PATTERN,
   DEMO_SEED_COUNT,
   seedRegistrations,
 } from "../../seed-registrations";
@@ -69,6 +71,12 @@ describe("demo seed", () => {
     const emails = seed.map((row) => row.email);
     for (const email of emails) expect(email).toMatch(/^[a-z0-9.]+@example\.com$/);
     expect(new Set(emails).size).toBe(emails.length);
+  });
+
+  it("uses visibly fake, unique mobile numbers, never random ones", () => {
+    const mobiles = seed.flatMap((row) => [row.mobile, row.emergencyContactMobile]);
+    for (const mobile of mobiles) expect(mobile).toMatch(DEMO_MOBILE_PATTERN);
+    expect(new Set(mobiles).size).toBe(mobiles.length);
   });
 
   it("spreads registrations over the last 60 days", () => {
@@ -250,6 +258,20 @@ describe("listRegistrations", () => {
     expect(owner.rows.map((x) => x.firstName)).toEqual([target.firstName]);
     expect((await listRegistrations(db, "viewer", { q: target.email })).total).toBe(0);
     expect((await listRegistrations(db, "viewer", { q: target.mobile })).total).toBe(0);
+
+    const local = `0${target.mobile.slice(3)}`;
+    const byLocal = await listRegistrations(db, "owner", { q: local });
+    expect(byLocal.rows.map((x) => x.mobile)).toEqual([target.mobile]);
+    expect((await listRegistrations(db, "viewer", { q: local })).total).toBe(0);
+  });
+
+  it("never pages by zero or less", async () => {
+    for (const pageSize of [0, Number.NaN]) {
+      expect(await listRegistrations(db, "viewer", { pageSize })).toMatchObject({ pageSize: 25 });
+    }
+    const one = await listRegistrations(db, "viewer", { pageSize: -3 });
+    expect(one).toMatchObject({ pageSize: 1, pageCount: DEMO_SEED_COUNT });
+    expect(one.rows).toHaveLength(1);
   });
 
   it("searches name and reference for both roles", async () => {
@@ -316,5 +338,105 @@ describe("listRegistrations", () => {
   it("returns an empty first page when nothing matches", async () => {
     const result = await listRegistrations(db, "viewer", { q: "no such runner" });
     expect(result).toEqual({ rows: [], total: 0, page: 1, pageCount: 1, pageSize: 25 });
+  });
+});
+
+describe("getOverview at the boundaries", () => {
+  let edge: PGlite;
+  let edgeDb: Db;
+
+  function row(overrides: Partial<typeof registrations.$inferInsert>) {
+    const createdAt = overrides.createdAt ?? new Date("2026-10-01T00:00:00Z");
+    return {
+      race: "5k",
+      firstName: "Edge",
+      lastName: "Case",
+      email: "edge@example.com",
+      mobile: "+639000000000",
+      birthdate: "1990-01-01",
+      sex: "female",
+      shirtSize: "M",
+      emergencyContactName: "Edge Contact",
+      emergencyContactMobile: "+639000005000",
+      consentAt: createdAt,
+      amountCentavos: RACES["5k"].priceCentavos,
+      status: "paid",
+      paidAt: createdAt,
+      createdAt,
+      ...overrides,
+    } satisfies typeof registrations.$inferInsert;
+  }
+
+  beforeAll(async () => {
+    edge = new PGlite();
+    edgeDb = drizzle({ client: edge, schema });
+    await migrate(edgeDb, { migrationsFolder });
+    await edgeDb.insert(registrations).values([
+      // Manila midnight is 16:00 UTC; the window opens at Manila midnight 59 days before today.
+      row({ createdAt: new Date("2026-10-13T15:59:59Z") }),
+      row({ createdAt: new Date("2026-10-13T16:00:00Z") }),
+      row({ createdAt: new Date("2026-08-15T15:59:59Z") }),
+      row({ createdAt: new Date("2026-08-15T16:00:00Z") }),
+      // Birthdays on, before and after the 18 and 60 cutoffs, and either side of 29 Feb.
+      row({ birthdate: "2008-10-14" }),
+      row({ birthdate: "2008-10-15" }),
+      row({ birthdate: "2008-10-13" }),
+      row({ birthdate: "1966-10-14" }),
+      row({ birthdate: "1966-10-15" }),
+      row({ birthdate: "2010-02-28" }),
+      row({ birthdate: "2010-03-01" }),
+      // Unpaid for exactly 24 hours is not yet abandoned; a millisecond longer is.
+      row({ status: "pending", paidAt: null, createdAt: new Date(NOW.getTime() - DAY_MS) }),
+      row({ status: "pending", paidAt: null, createdAt: new Date(NOW.getTime() - DAY_MS - 1) }),
+      row({ status: "pending", paidAt: null, createdAt: new Date(NOW.getTime() - 3_600_000) }),
+      row({ status: "cancelled", paidAt: null, createdAt: new Date(NOW.getTime() - 3_600_000) }),
+    ]);
+    await edge.exec("SET ROLE rr_admin");
+  });
+
+  afterAll(async () => {
+    await edge.close();
+  });
+
+  it("buckets days in Manila time and starts the window at Manila midnight", async () => {
+    const { daily } = await getOverview(edgeDb, { now: NOW });
+    const counts = Object.fromEntries(daily.filter((d) => d.paid).map((d) => [d.day, d.paid]));
+    expect(counts).toEqual({ "2026-08-16": 1, "2026-10-01": 7, "2026-10-13": 1, "2026-10-14": 1 });
+  });
+
+  it("puts a runner in the older group on their birthday", async () => {
+    const { ageGroups } = await getOverview(edgeDb, { now: NOW });
+    expect(Object.fromEntries(ageGroups.map((g) => [g.label, g.count]))).toEqual({
+      "Under 18": 3,
+      "18–29": 2,
+      "30–39": 4,
+      "40–49": 0,
+      "50–59": 1,
+      "60+": 1,
+    });
+  });
+
+  it("handles 29 February like Postgres age()", async () => {
+    const { ageGroups } = await getOverview(edgeDb, { now: new Date("2028-02-29T04:00:00Z") });
+    expect(Object.fromEntries(ageGroups.map((g) => [g.label, g.count]))).toEqual({
+      "Under 18": 1,
+      "18–29": 4,
+      "30–39": 4,
+      "40–49": 0,
+      "50–59": 0,
+      "60+": 2,
+    });
+    await edge.exec("RESET ROLE");
+    const { rows } = await edge.query<{ age: number }>(
+      `SELECT date_part('year', age(date '2028-02-29', birthdate))::int AS age FROM registrations
+        WHERE birthdate IN ('2010-02-28', '2010-03-01') ORDER BY birthdate`,
+    );
+    await edge.exec("SET ROLE rr_admin");
+    expect(rows.map((x) => x.age)).toEqual([18, 17]);
+  });
+
+  it("counts an unpaid checkout as abandoned only after more than 24 hours", async () => {
+    const { abandoned } = await getOverview(edgeDb, { now: NOW });
+    expect(abandoned).toBe(2);
   });
 });

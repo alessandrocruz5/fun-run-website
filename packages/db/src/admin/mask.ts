@@ -16,27 +16,28 @@ export function canUnmask(role: OrganizerRole): boolean {
 
 const r = registrations;
 
-/** `juana@example.com` → `j•••@example.com`. Without an `@`, only the mask. */
+/**
+ * `juana@example.com` → `j•••@example.com`. A one-character local part is masked whole
+ * (`j@x` → `•••@x`); without an `@`, only the mask.
+ */
 function maskedEmail(column: typeof r.email): SQL<string> {
-  return sql<string>`case when position('@' in ${column}) > 1
-    then left(${column}, 1) || ${MASK} || '@' || split_part(${column}, '@', 2)
+  return sql<string>`case
+    when position('@' in ${column}) > 2
+      then left(${column}, 1) || ${MASK} || '@' || split_part(${column}, '@', 2)
+    when position('@' in ${column}) = 2 then ${MASK} || '@' || split_part(${column}, '@', 2)
     else ${MASK} end`;
 }
 
 /** `+639170000001` → `•••01`. A number too short to hide stays fully masked. */
-function maskedMobile(column: typeof r.mobile | typeof r.emergencyContactMobile): SQL<string> {
+function maskedMobile(column: typeof r.mobile): SQL<string> {
   return sql<string>`case when length(${column}) > 6
     then ${MASK} || right(${column}, 2) else ${MASK} end`;
 }
 
-/** `Pedro Dela Cruz` → `P•••`. */
-function maskedName(column: typeof r.emergencyContactName): SQL<string> {
-  return sql<string>`case when length(${column}) > 1 then left(${column}, 1) || ${MASK} else ${MASK} end`;
-}
-
 /**
  * The personal-data columns of `registrations` for a SELECT, raw for the owner and masked by the
- * database for everyone else. A viewer's `birthdate` is null.
+ * database for everyone else. A viewer's birthdate and emergency contact are null: hidden, as
+ * /privacy says.
  */
 export function personalDataColumns(role: OrganizerRole) {
   if (canUnmask(role)) {
@@ -44,15 +45,15 @@ export function personalDataColumns(role: OrganizerRole) {
       email: sql<string>`${r.email}`,
       mobile: sql<string>`${r.mobile}`,
       birthdate: sql<string | null>`${r.birthdate}::text`,
-      emergencyContactName: sql<string>`${r.emergencyContactName}`,
-      emergencyContactMobile: sql<string>`${r.emergencyContactMobile}`,
+      emergencyContactName: sql<string | null>`${r.emergencyContactName}`,
+      emergencyContactMobile: sql<string | null>`${r.emergencyContactMobile}`,
     };
   }
   return {
     email: maskedEmail(r.email),
     mobile: maskedMobile(r.mobile),
     birthdate: sql<string | null>`null::text`,
-    emergencyContactName: maskedName(r.emergencyContactName),
-    emergencyContactMobile: maskedMobile(r.emergencyContactMobile),
+    emergencyContactName: sql<string | null>`null::text`,
+    emergencyContactMobile: sql<string | null>`null::text`,
   };
 }

@@ -334,15 +334,17 @@ its database role can't read the auth tables.
   It **deletes every registration first**, visitors' real ones included: that is the weekly
   deletion `/privacy` promises, so run it at least every 7 days. It also deletes expired organizer
   sessions and every sign-in rate-limit entry. `ALLOW_DEMO_SEED=1` must be on the command line:
-  the script checks it before loading `.env`, so a value saved there doesn't count. It isn't one
-  transaction (Neon's HTTP driver has none), so if it fails partway, run it again. Run it on `dev`
+  the script checks it before loading `.env`, so a value saved there doesn't count. It runs as separate
+  statements, not one transaction, so if it fails partway, run it again. Run it on `dev`
   first after a schema change.
 - **What the dashboard shows.** The overview counts **paid rows only** for runners, gross, fees,
   net, age groups (age today) and shirt sizes. "Abandoned" is cancelled, or unpaid after 24 hours.
   Days are Manila time. The registrations list keeps its search, filters, sort and page in the URL.
   For the viewer, `@rr/db/admin` masks email and mobile in the SQL and hides birthdate and
   emergency contact, and search matches only names and references (so it can't confirm whether
-  an address is registered).
+  an address is registered). The viewer's birthdate and emergency contact come back null. The
+  search term is in the URL (`?q=`), so a name, or an owner's email or mobile search, can appear
+  in Vercel's request logs and browser history; `/privacy` says so. Our own logs never carry it.
 
 ## Roll back
 

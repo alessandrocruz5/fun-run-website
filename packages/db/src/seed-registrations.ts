@@ -148,8 +148,14 @@ type PaymentMethod = keyof typeof PAYMENT_METHODS;
 
 const DAY_MS = 86_400_000;
 
-function mobileNumber(random: () => number): string {
-  return `+639${String(Math.floor(random() * 1e9)).padStart(9, "0")}`;
+/**
+ * A visibly fake number, `+63900000` + 4 digits: never a random one, which could belong to a real
+ * subscriber. Runners get serials 0001-4999, emergency contacts 5001-9999.
+ */
+export const DEMO_MOBILE_PATTERN = /^\+63900000\d{4}$/;
+
+function mobileNumber(serial: number): string {
+  return `+63900000${String(serial).padStart(4, "0")}`;
 }
 
 function emailLocalPart(...parts: string[]): string {
@@ -163,7 +169,7 @@ function emailLocalPart(...parts: string[]): string {
 export type DemoSeedOptions = { count?: number; days?: number; now?: Date; seed?: number };
 
 /**
- * Fake registrations at `@example.com`, created across the last `days` days (oldest first). Each
+ * Fake registrations at `@example.com` with `+63900000…` mobiles, created across the last `days` days (oldest first). Each
  * paid row has a test payment whose amount is the race's price from `RACES`.
  */
 export function buildDemoRegistrations({
@@ -172,6 +178,7 @@ export function buildDemoRegistrations({
   now = new Date(),
   seed = 2027,
 }: DemoSeedOptions = {}): (typeof registrations.$inferInsert)[] {
+  if (count > 4_999) throw new Error("buildDemoRegistrations: at most 4,999 rows (mobile serials)");
   const random = prng(seed);
   // The newest row is at least half an hour old, so its payment and email are in the past too.
   const span = days * DAY_MS - 30 * 60_000;
@@ -200,12 +207,12 @@ export function buildDemoRegistrations({
       firstName,
       lastName,
       email: `${emailLocalPart(firstName, lastName, serial)}@example.com`,
-      mobile: mobileNumber(random),
+      mobile: mobileNumber(i + 1),
       birthdate,
       sex,
       shirtSize: weighted(random, SIZE_WEIGHTS),
       emergencyContactName: `${pick(random, FIRST_NAMES[random() < 0.5 ? "female" : "male"])} ${lastName}`,
-      emergencyContactMobile: mobileNumber(random),
+      emergencyContactMobile: mobileNumber(5_000 + i + 1),
       consentAt: createdAt,
       amountCentavos,
       status,
@@ -243,7 +250,8 @@ export async function seedRegistrations(
   db: Db,
   rows: (typeof registrations.$inferInsert)[],
 ): Promise<void> {
-  // Not one transaction: Neon's HTTP driver has none. A failed run leaves fewer rows; run it again.
+  // Separate statements, so the same code runs on PGlite in tests. A failed run leaves fewer rows:
+  // run it again.
   await db.delete(registrations);
   await db.delete(authSessions).where(lt(authSessions.expiresAt, new Date()));
   await db.delete(authRateLimits);

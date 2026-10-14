@@ -96,7 +96,7 @@ export async function getOverview(db: Db, { now = new Date() }: { now?: Date } =
   const abandonedBefore = new Date(now.getTime() - ABANDONED_AFTER_HOURS * 3_600_000);
   // A runner is at least N years old when born on or before this date.
   const cutoffs = AGE_GROUPS.map((g) => yearsBefore(today, g.minAge));
-  // No parameters inside, so GROUP BY can repeat it verbatim.
+  // TIME_ZONE as a literal, not a parameter, so GROUP BY can repeat the expression verbatim.
   const createdDay = sql<string>`to_char(${r.createdAt} at time zone 'Asia/Manila', 'YYYY-MM-DD')`;
 
   const [raceRows, [abandonedRow], dailyRows, [ageRow], sizeRows] = await Promise.all([
@@ -221,7 +221,7 @@ export async function listRegistrations(
   role: OrganizerRole,
   filters: RegistrationListFilters = {},
 ) {
-  const pageSize = filters.pageSize ?? PAGE_SIZE;
+  const pageSize = Math.max(1, Math.trunc(filters.pageSize ?? PAGE_SIZE) || PAGE_SIZE);
   const term = filters.q?.trim().slice(0, MAX_SEARCH_LENGTH);
   const conditions: SQL[] = [];
   if (filters.race) conditions.push(eq(r.race, filters.race));
@@ -233,7 +233,11 @@ export async function listRegistrations(
       ilike(r.reference, pattern),
       ilike(sql`${r.firstName} || ' ' || ${r.lastName}`, pattern),
     ];
-    if (canUnmask(role)) matches.push(ilike(r.email, pattern), ilike(r.mobile, pattern));
+    if (canUnmask(role)) {
+      matches.push(ilike(r.email, pattern), ilike(r.mobile, pattern));
+      // Mobiles are stored as +63…; let `0917…` find them too.
+      if (/^0\d/.test(term)) matches.push(ilike(r.mobile, likePattern(`+63${term.slice(1)}`)));
+    }
     conditions.push(or(...matches) as SQL);
   }
   const where = conditions.length ? and(...conditions) : undefined;

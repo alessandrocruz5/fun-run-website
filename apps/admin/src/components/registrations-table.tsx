@@ -1,11 +1,16 @@
-import type { RegistrationListRow, RegistrationStatus, SortKey } from "@rr/db/admin";
+import {
+  type RegistrationListRow,
+  type RegistrationStatus,
+  type SortKey,
+  TIME_ZONE,
+} from "@rr/db/admin";
 import { RACES } from "@rr/db/races";
 import Link from "next/link";
 import { type ListParams, sortHref } from "@/lib/search-params";
 import { formatPeso } from "./stat-card";
 
 const registeredAt = new Intl.DateTimeFormat("en-PH", {
-  timeZone: "Asia/Manila",
+  timeZone: TIME_ZONE,
   month: "short",
   day: "numeric",
   hour: "numeric",
