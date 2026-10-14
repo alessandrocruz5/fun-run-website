@@ -15,7 +15,9 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await client.exec("RESET ROLE; TRUNCATE registrations;");
+  await client.exec(
+    "RESET ROLE; TRUNCATE registrations, auth_users, auth_verifications, auth_rate_limits CASCADE;",
+  );
 });
 
 afterAll(async () => {
@@ -30,6 +32,41 @@ const insertRow = `
     'runner@example.test', '+639170000000', '1990-01-01', 'male', 'M', 'Test Contact',
     '+639170000001', now(), 80000)
   RETURNING id`;
+
+const AUTH_TABLES = [
+  "auth_users",
+  "auth_sessions",
+  "auth_accounts",
+  "auth_verifications",
+  "auth_rate_limits",
+] as const;
+
+const insertUser = `
+  INSERT INTO auth_users (id, name, email, role)
+  VALUES (md5(random()::text), 'Test Organizer', md5(random()::text) || '@example.test', 'viewer')
+  RETURNING id`;
+
+const TABLE_PRIVILEGES = [
+  "SELECT",
+  "INSERT",
+  "UPDATE",
+  "DELETE",
+  "TRUNCATE",
+  "REFERENCES",
+  "TRIGGER",
+] as const;
+
+/** Which table privileges `role` holds on `table`, directly or through a group. */
+async function heldPrivileges(role: string, table: string): Promise<Record<string, boolean>> {
+  const held: Record<string, boolean> = {};
+  for (const p of TABLE_PRIVILEGES) {
+    const { rows } = await client.query<{ ok: boolean }>(
+      `SELECT has_table_privilege('${role}', '${table}', '${p}') AS ok`,
+    );
+    held[p] = rows[0]?.ok ?? false;
+  }
+  return held;
+}
 
 /** Run `sql` as `role` and return the Postgres error code, or null if it succeeded. */
 async function errorCodeAs(role: string, sql: string): Promise<string | null> {
@@ -48,7 +85,7 @@ describe("migrations", () => {
     const { rows } = await client.query<{ n: number }>(
       "SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(rows[0]?.n).toBe(2);
+    expect(rows[0]?.n).toBe(4);
     await expect(migrate(drizzle({ client, schema }), { migrationsFolder })).resolves.not.toThrow();
   });
 });
@@ -127,5 +164,109 @@ describe("rr_app", () => {
     expect(await errorCodeAs("rr_app_login", "SELECT * FROM registrations")).toBeNull();
     expect(await errorCodeAs("rr_app_login", "DELETE FROM registrations")).toBe("42501");
     expect(await errorCodeAs("rr_app_login", "DROP TABLE registrations")).toBe("42501");
+  });
+
+  // The public site holds no login secret: it can't read sessions or password hashes.
+  it.each(AUTH_TABLES)("holds no privilege on %s", async (table) => {
+    expect(Object.values(await heldPrivileges("rr_app", table))).not.toContain(true);
+    expect(await errorCodeAs("rr_app", `SELECT * FROM ${table}`)).toBe("42501");
+  });
+});
+
+describe("auth_users", () => {
+  it("accepts only the owner and viewer roles, defaulting to viewer", async () => {
+    const { rows } = await client.query<{ role: string }>(
+      "INSERT INTO auth_users (id, name, email) VALUES ('u1', 'Test', 'u1@example.test') RETURNING role",
+    );
+    expect(rows).toEqual([{ role: "viewer" }]);
+    await expect(
+      client.exec(
+        "INSERT INTO auth_users (id, name, email, role) VALUES ('u2', 'Test', 'u2@example.test', 'admin')",
+      ),
+    ).rejects.toMatchObject({ code: "23514" });
+  });
+});
+
+describe("rr_admin", () => {
+  it("is a group role that cannot log in", async () => {
+    const { rows } = await client.query<{ rolcanlogin: boolean; rolsuper: boolean }>(
+      "SELECT rolcanlogin, rolsuper FROM pg_roles WHERE rolname = 'rr_admin'",
+    );
+    expect(rows).toEqual([{ rolcanlogin: false, rolsuper: false }]);
+  });
+
+  it("can read registrations", async () => {
+    await client.exec(insertRow);
+    expect(await errorCodeAs("rr_admin", "SELECT * FROM registrations")).toBeNull();
+  });
+
+  it.each([
+    ["INSERT", insertRow],
+    ["UPDATE", "UPDATE registrations SET status = 'cancelled'"],
+    ["DELETE", "DELETE FROM registrations"],
+    ["TRUNCATE", "TRUNCATE registrations"],
+    ["DROP TABLE", "DROP TABLE registrations"],
+    ["ALTER TABLE", "ALTER TABLE registrations ADD COLUMN x text"],
+    ["CREATE INDEX", "CREATE INDEX x_idx ON registrations (email)"],
+    ["CREATE TABLE", "CREATE TABLE public.x (id int)"],
+    ["CREATE SCHEMA", "CREATE SCHEMA x"],
+    ["ALTER TYPE", "ALTER TYPE registration_status ADD VALUE 'refunded'"],
+    ["read migration history", "SELECT * FROM drizzle.__drizzle_migrations"],
+    ["TRUNCATE an auth table", "TRUNCATE auth_sessions"],
+    ["DROP an auth table", "DROP TABLE auth_sessions"],
+    ["ALTER an auth table", "ALTER TABLE auth_users ADD COLUMN x text"],
+  ])("is denied %s", async (_label, sql) => {
+    await client.exec(insertRow);
+    expect(await errorCodeAs("rr_admin", sql)).toBe("42501");
+  });
+
+  it("holds only SELECT on registrations", async () => {
+    expect(await heldPrivileges("rr_admin", "registrations")).toEqual({
+      SELECT: true,
+      INSERT: false,
+      UPDATE: false,
+      DELETE: false,
+      TRUNCATE: false,
+      REFERENCES: false,
+      TRIGGER: false,
+    });
+  });
+
+  it.each(AUTH_TABLES)("holds exactly SELECT, INSERT, UPDATE and DELETE on %s", async (table) => {
+    expect(await heldPrivileges("rr_admin", table)).toEqual({
+      SELECT: true,
+      INSERT: true,
+      UPDATE: true,
+      DELETE: true,
+      TRUNCATE: false,
+      REFERENCES: false,
+      TRIGGER: false,
+    });
+  });
+
+  it("can sign organizers in and out (auth-table DML)", async () => {
+    expect(await errorCodeAs("rr_admin", insertUser)).toBeNull();
+    const session = `
+      INSERT INTO auth_sessions (id, token, user_id, expires_at)
+      SELECT md5(random()::text), md5(random()::text), id, now() + interval '1 hour' FROM auth_users;
+      UPDATE auth_sessions SET expires_at = now() + interval '2 hours';
+      DELETE FROM auth_sessions;`;
+    expect(await errorCodeAs("rr_admin", session)).toBeNull();
+  });
+
+  it("passes the same rights to a login role created as in the runbook", async () => {
+    await client.exec(
+      "DO $$ BEGIN CREATE ROLE rr_admin_login LOGIN IN ROLE rr_admin; " +
+        "EXCEPTION WHEN duplicate_object THEN NULL; END $$;",
+    );
+    await client.exec(insertRow);
+    expect(await errorCodeAs("rr_admin_login", "SELECT * FROM registrations")).toBeNull();
+    expect(await errorCodeAs("rr_admin_login", insertUser)).toBeNull();
+    expect(await errorCodeAs("rr_admin_login", insertRow)).toBe("42501");
+    expect(
+      await errorCodeAs("rr_admin_login", "UPDATE registrations SET status = 'cancelled'"),
+    ).toBe("42501");
+    expect(await errorCodeAs("rr_admin_login", "DELETE FROM registrations")).toBe("42501");
+    expect(await errorCodeAs("rr_admin_login", "DROP TABLE registrations")).toBe("42501");
   });
 });

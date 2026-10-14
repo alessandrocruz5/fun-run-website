@@ -114,6 +114,9 @@ export default async function RegisterSuccessPage() {
             <ButtonLink href="/" variant="ghost" size="md">
               Back to the start
             </ButtonLink>
+            <ButtonLink href="/organizer" variant="ghost" size="md">
+              See it from the organizer&apos;s side
+            </ButtonLink>
           </div>
         </div>
         <div className="bib" aria-hidden="true">

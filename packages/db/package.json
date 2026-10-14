@@ -5,15 +5,19 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./admin": "./src/admin/queries.ts",
     "./races": "./src/races.ts",
-    "./schema": "./src/schema/index.ts"
+    "./schema": "./src/schema/index.ts",
+    "./seed-organizers": "./src/seed-organizers.ts"
   },
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "seed:organizers": "tsx src/seed-organizers.ts",
+    "seed:registrations": "tsx src/seed-registrations.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
@@ -25,8 +29,10 @@
     "@electric-sql/pglite": "^0.5.8",
     "@rr/config": "workspace:*",
     "@types/node": "^24.19.1",
+    "better-auth": "^1.7.7",
     "drizzle-kit": "^0.31.11",
     "eslint": "^10.12.0",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "vitest": "^5.0.3"
   }
