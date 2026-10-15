@@ -34,3 +34,18 @@ jobs:
       - run: pnpm test
       # Same build Vercel runs, with no env: secrets are read per request, never at build time.
       - run: pnpm build
+
+  # Fails when a pushed or PR commit adds a secret. It scans only those commits, not all history.
+  secrets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read # the action lists the PR's commits to pick its scan range
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # gitleaks walks the commit range, so it needs the history
+      # Personal-account repo: no GITLEAKS_LICENSE needed. The token only reads the PR's commits.
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

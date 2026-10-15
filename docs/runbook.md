@@ -377,3 +377,23 @@ latest → **Redeploy**, or push a commit.
   touches no database, so it stays up when Neon is down or asleep.
 - **Logs:** `vercel logs <deployment-url>`, or the dashboard's Logs tab. Env validation failures
   fail fast with `Invalid environment variables:` and list the offending keys, never their values.
+
+### Secret exposure
+
+- **A committed secret is public.** Treat any secret that reached git (a commit, a PR, a fork) as
+  leaked: rotate it. Deleting the line only hides it from the latest tree.
+- **`BETTER_AUTH_SECRET`:** generate a new one with `openssl rand -base64 32`, set it in the
+  **admin** Vercel project (Production and Preview), then redeploy. It signs every organizer out;
+  no re-seed is needed.
+- **Other secrets:** roll `PAYMONGO_*`, `RESEND_API_KEY` and `TURNSTILE_SECRET_KEY` in the
+  provider's dashboard, update them in Vercel, then redeploy. For a database login, as the owner:
+  ```sql
+  -- password: openssl rand -base64 32
+  ALTER ROLE rr_app_login PASSWORD '<password>'; -- or rr_admin_login
+  ```
+  Then update that app's `DATABASE_URL` in Vercel (and `.env.local`) and redeploy.
+- **Don't rewrite `main`'s history.** Rotation makes the old value dead; a force-push breaks every
+  clone and open PR and doesn't remove copies GitHub or others already have.
+- **Catching the next one:** the CI `secrets` job (gitleaks) fails a PR or push that adds a
+  secret, and GitHub's secret scanning and push protection (repo Settings → Code security) flag
+  known token formats.
