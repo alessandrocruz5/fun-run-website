@@ -3,6 +3,7 @@ import {
   claimConfirmation,
   getDb,
   getRegistrationByCheckoutSessionId,
+  markConfirmationSent,
   markPaid,
   type Registration,
   releaseConfirmation,
@@ -20,6 +21,7 @@ vi.mock("@rr/db", async (importOriginal) => ({
   getRegistrationByCheckoutSessionId: vi.fn(),
   markPaid: vi.fn(),
   claimConfirmation: vi.fn(),
+  markConfirmationSent: vi.fn(),
   releaseConfirmation: vi.fn(),
 }));
 
@@ -56,6 +58,7 @@ function row(overrides: Partial<Registration> = {}): Registration {
     feeCentavos: null,
     netCentavos: null,
     paidAt: null,
+    confirmationClaimedAt: null,
     confirmationSentAt: null,
     createdAt: new Date(),
     ...overrides,
@@ -144,8 +147,9 @@ beforeEach(() => {
   vi.mocked(markPaid).mockResolvedValue(paidRow);
   vi.mocked(claimConfirmation).mockImplementation(async () => ({
     ...paidRow,
-    confirmationSentAt: new Date(),
+    confirmationClaimedAt: new Date(),
   }));
+  vi.mocked(markConfirmationSent).mockResolvedValue(true);
   vi.mocked(releaseConfirmation).mockResolvedValue(true);
   vi.mocked(sendRegistrationConfirmed).mockResolvedValue({ status: "sent", id: "email_1" });
   vi.stubEnv("SITE_URL", "https://riverline.test");

@@ -1,0 +1,1 @@
+ALTER TABLE "registrations" ADD COLUMN "confirmation_claimed_at" timestamp with time zone;

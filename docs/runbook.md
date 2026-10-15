@@ -226,11 +226,19 @@ payment: nothing was charged".
   for that domain only. Set `RESEND_API_KEY` and `EMAIL_FROM` (`Riverline Run <race@mail.<domain>>`)
   in Vercel **Production** and **Preview**, then redeploy. Locally, `onboarding@resend.dev` as the
   sender works without a domain, but only delivers to your Resend account's address.
+- **Deploy order.** The code that records delivery needs migration `0004` (the
+  `confirmation_claimed_at` column). Apply it to each Neon branch (see **Migrations**) **before**
+  deploying that code to the matching Vercel environment.
 - **When it is sent.** Only after a payment is recorded: whichever of the webhook and the success
-  page sees `paid` claims the row (`confirmation_sent_at`, one conditional update), sends, and
-  keeps the claim. Every other caller finds the claim taken and sends nothing. Pending and
-  cancelled registrations never get an email. Resend's `Idempotency-Key` is the registration ID,
-  so a request repeated within 24 hours is never delivered twice.
+  page sees `paid` claims the row (`confirmation_claimed_at`, one conditional update) and sends.
+  Every other caller finds the claim taken and sends nothing. Once Resend accepts the email,
+  `confirmation_sent_at` is set: it means delivered, and a row with it set is never sent again.
+  Pending and cancelled registrations never get an email. Resend's `Idempotency-Key` is the
+  registration ID, so a request repeated within 24 hours is never delivered twice.
+- **Self-heal.** A claim older than 5 minutes on a row that is still unsent and was paid less than
+  23 hours ago is taken again by the next webhook retry or success-page load, which sends the email.
+  If the first sender had in fact reached Resend, the same idempotency key means it isn't
+  delivered twice.
 - **When sending fails** (Resend down, rate-limited, bad key, missing env), the claim is released
   and the error rethrown: the webhook answers 500 so PayMongo retries, and the success page says
   "We couldn't check just now" so the runner's **Check again** retries. The payment itself stays
@@ -240,15 +248,22 @@ payment: nothing was charged".
     `422 validation_error` is usually `EMAIL_FROM` on an unverified domain, `429` is Resend's rate
     limit. `EnvValidationError` names the missing variable.
   - `email.release_failed`: the claim couldn't be released after a failed send (database down).
-    The row keeps `confirmation_sent_at` with no email sent. See **Stuck claim** below.
+    The row keeps its claim with no email sent, and heals once the claim is 5 minutes old (see
+    **Self-heal**).
+  - `email.mark_sent_failed`: the email went out, but recording the delivery failed (database
+    down). The confirmation still succeeds. The row keeps only its claim, so the dashboard shows the
+    email as not sent until a webhook retry or success-page load after 5 minutes sends it again
+    (Resend doesn't deliver it twice) and records it.
   - `email.duplicate`: Resend had already used this registration's key with a different payload
     (e.g. the template changed between two attempts within 24 hours). That earlier request went
-    out, so this one is treated as sent.
-- **Stuck claim.** A row with `confirmation_sent_at` set but no email in Resend → Emails (search by
-  the reference in the subject) means the function died mid-send. As the owner, clear the claim and
-  resend the webhook event from the PayMongo dashboard:
+    out, so this one is treated as sent and recorded as delivered.
+- **Stuck claim.** New rows heal by themselves (see **Self-heal**). Fix a row by hand only when it
+  is paid, has no email in Resend → Emails (search by the reference in the subject), and either
+  was paid more than 23 hours ago with `confirmation_claimed_at` still set, or got stuck before
+  migration `0004` (it then shows `confirmation_sent_at` set although no email went out). As the
+  owner, clear both columns and resend the webhook event from the PayMongo dashboard:
   ```sql
-  UPDATE registrations SET confirmation_sent_at = NULL
+  UPDATE registrations SET confirmation_sent_at = NULL, confirmation_claimed_at = NULL
   WHERE reference = '<RR-…>' AND status = 'paid';
   ```
 - **Check it** (production): pay with card `4343 4343 4343 4345` using an address you can read.

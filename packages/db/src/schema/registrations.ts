@@ -64,7 +64,12 @@ export const registrations = pgTable(
     feeCentavos: integer("fee_centavos"),
     netCentavos: integer("net_centavos"),
     paidAt: timestamp("paid_at", { withTimezone: true }),
-    /** One-shot email claim: set before sending, cleared again if the send fails. */
+    /**
+     * Email claim: taken by the caller that is sending the email; cleared if the send fails; may
+     * be taken again once stale (see `claimConfirmation`).
+     */
+    confirmationClaimedAt: timestamp("confirmation_claimed_at", { withTimezone: true }),
+    /** Set only after Resend accepted the email (or reported it already sent). */
     confirmationSentAt: timestamp("confirmation_sent_at", { withTimezone: true }),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

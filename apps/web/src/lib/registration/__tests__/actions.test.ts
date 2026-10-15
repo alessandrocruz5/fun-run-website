@@ -82,6 +82,7 @@ function pendingRow(race: keyof typeof RACES): Registration {
     feeCentavos: null,
     netCentavos: null,
     paidAt: null,
+    confirmationClaimedAt: null,
     confirmationSentAt: null,
     createdAt: new Date(),
   };

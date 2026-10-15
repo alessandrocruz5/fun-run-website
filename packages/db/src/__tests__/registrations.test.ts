@@ -14,6 +14,7 @@ import {
   getRegistrationByCheckoutSessionId,
   getRegistrationByReference,
   markCancelled,
+  markConfirmationSent,
   type MarkPaidInput,
   markPaid,
   releaseConfirmation,
@@ -96,6 +97,15 @@ describe("schema", () => {
     expect(defs).toMatch(/\(created_at\)/);
     expect(defs).toMatch(/UNIQUE INDEX .*\(reference\)/);
     expect(defs).toMatch(/UNIQUE INDEX .*\(checkout_session_id\)/);
+  });
+
+  it("has a nullable confirmation_claimed_at column", async () => {
+    await client.exec("RESET ROLE");
+    const { rows } = await client.query<{ data_type: string; is_nullable: string }>(
+      "SELECT data_type, is_nullable FROM information_schema.columns " +
+        "WHERE table_name = 'registrations' AND column_name = 'confirmation_claimed_at'",
+    );
+    expect(rows).toEqual([{ data_type: "timestamp with time zone", is_nullable: "YES" }]);
   });
 
   it("rejects a non-positive amount", async () => {
@@ -191,6 +201,7 @@ describe("markPaid", () => {
       feeCentavos: 2_500,
       netCentavos: 97_500,
       paidAt: new Date("2026-10-08T02:00:00Z"),
+      confirmationClaimedAt: null,
       confirmationSentAt: null,
     });
   });
@@ -237,35 +248,138 @@ describe("markCancelled", () => {
   });
 });
 
-describe("claimConfirmation / releaseConfirmation", () => {
+describe("claimConfirmation / markConfirmationSent / releaseConfirmation", () => {
+  // Each test holds a single row, so a statement without WHERE moves only that row's clock.
+  async function asOwner(statement: string) {
+    await client.exec(`RESET ROLE; ${statement}; SET ROLE rr_app;`);
+  }
+
+  /** A registration paid just now, so a stale claim on it is inside the reclaim window. */
+  async function paidRegistration() {
+    const row = await pendingWithSession();
+    await markPaid(db, payment({ paidAt: new Date() }));
+    return row;
+  }
+
+  function stored(reference: string) {
+    return getRegistrationByReference(db, reference);
+  }
+
   it("does not claim an unpaid registration", async () => {
     const row = await pendingWithSession();
     expect(await claimConfirmation(db, row.id)).toBeNull();
   });
 
-  it("returns a paid registration exactly once", async () => {
-    const row = await pendingWithSession();
-    await markPaid(db, payment());
+  it("claims without marking the email as sent, once", async () => {
+    const row = await paidRegistration();
+    const claimed = await claimConfirmation(db, row.id);
+    expect(claimed?.confirmationClaimedAt).toBeInstanceOf(Date);
+    expect(claimed?.confirmationSentAt).toBeNull();
+    expect(await claimConfirmation(db, row.id)).toBeNull();
+    expect(await stored(row.reference)).toMatchObject({
+      confirmationClaimedAt: claimed?.confirmationClaimedAt,
+      confirmationSentAt: null,
+    });
+  });
+
+  it("returns a paid registration to exactly one of several concurrent callers", async () => {
+    const row = await paidRegistration();
     const claims = await Promise.all(
       Array.from({ length: 5 }, () => claimConfirmation(db, row.id)),
     );
     const won = claims.filter((c) => c !== null);
     expect(won).toHaveLength(1);
-    expect(won[0]?.confirmationSentAt).toBeInstanceOf(Date);
+    expect(won[0]?.confirmationClaimedAt).toBeInstanceOf(Date);
+    expect(won[0]?.confirmationSentAt).toBeNull();
+  });
+
+  it("takes over a claim older than 5 minutes exactly once", async () => {
+    const row = await paidRegistration();
+    await claimConfirmation(db, row.id);
+    await asOwner(
+      "UPDATE registrations SET confirmation_claimed_at = now() - interval '6 minutes'",
+    );
+    const reclaimed = await claimConfirmation(db, row.id);
+    expect(reclaimed?.confirmationClaimedAt?.getTime()).toBeGreaterThan(Date.now() - 60_000);
     expect(await claimConfirmation(db, row.id)).toBeNull();
   });
 
+  it("leaves a claim that is only 4 minutes old alone", async () => {
+    const row = await paidRegistration();
+    await claimConfirmation(db, row.id);
+    await asOwner(
+      "UPDATE registrations SET confirmation_claimed_at = now() - interval '4 minutes'",
+    );
+    expect(await claimConfirmation(db, row.id)).toBeNull();
+  });
+
+  it("doesn't take over a stale claim on a row paid more than 23 hours ago", async () => {
+    const row = await paidRegistration();
+    await claimConfirmation(db, row.id);
+    await asOwner(
+      "UPDATE registrations SET confirmation_claimed_at = now() - interval '6 minutes', " +
+        "paid_at = now() - interval '24 hours'",
+    );
+    expect(await claimConfirmation(db, row.id)).toBeNull();
+  });
+
+  it("never time-limits a first claim", async () => {
+    const row = await paidRegistration();
+    await asOwner("UPDATE registrations SET paid_at = now() - interval '30 hours'");
+    expect(await claimConfirmation(db, row.id)).not.toBeNull();
+  });
+
+  it("records delivery once", async () => {
+    const row = await paidRegistration();
+    await claimConfirmation(db, row.id);
+    expect(await markConfirmationSent(db, row.id)).toBe(true);
+    const sentAt = (await stored(row.reference))?.confirmationSentAt;
+    expect(sentAt).toBeInstanceOf(Date);
+    expect(await markConfirmationSent(db, row.id)).toBe(false);
+    expect((await stored(row.reference))?.confirmationSentAt).toEqual(sentAt);
+  });
+
+  it("records delivery even after the claim was taken over", async () => {
+    const row = await paidRegistration();
+    await claimConfirmation(db, row.id);
+    await asOwner(
+      "UPDATE registrations SET confirmation_claimed_at = now() - interval '6 minutes'",
+    );
+    expect(await claimConfirmation(db, row.id)).not.toBeNull();
+    expect(await markConfirmationSent(db, row.id)).toBe(true);
+  });
+
+  it("never claims or releases a delivered row, even with a stale claim", async () => {
+    const row = await paidRegistration();
+    await claimConfirmation(db, row.id);
+    await markConfirmationSent(db, row.id);
+    expect(await claimConfirmation(db, row.id)).toBeNull();
+    expect(await releaseConfirmation(db, row.id)).toBe(false);
+
+    await asOwner(
+      "UPDATE registrations SET confirmation_claimed_at = now() - interval '6 minutes'",
+    );
+    expect(await claimConfirmation(db, row.id)).toBeNull();
+    const after = await stored(row.reference);
+    expect(after?.confirmationClaimedAt).toBeInstanceOf(Date);
+    expect(after?.confirmationSentAt).toBeInstanceOf(Date);
+  });
+
   it("can be claimed again after a release", async () => {
-    const row = await pendingWithSession();
-    await markPaid(db, payment());
+    const row = await paidRegistration();
     await claimConfirmation(db, row.id);
     expect(await releaseConfirmation(db, row.id)).toBe(true);
-    expect((await getRegistrationByReference(db, row.reference))?.confirmationSentAt).toBeNull();
+    expect(await stored(row.reference)).toMatchObject({
+      confirmationClaimedAt: null,
+      confirmationSentAt: null,
+    });
     expect(await claimConfirmation(db, row.id)).not.toBeNull();
   });
 
   it("reports when there was no claim to release", async () => {
-    const row = await pendingWithSession();
-    expect(await releaseConfirmation(db, row.id)).toBe(false);
+    const pending = await pendingWithSession();
+    expect(await releaseConfirmation(db, pending.id)).toBe(false);
+    await markPaid(db, payment({ paidAt: new Date() }));
+    expect(await releaseConfirmation(db, pending.id)).toBe(false);
   });
 });
