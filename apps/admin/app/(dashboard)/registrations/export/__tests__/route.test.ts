@@ -32,7 +32,7 @@ const row = {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.requireSession.mockResolvedValue({ userId: "u1", name: "Demo", role: "viewer" });
-  mocks.listRegistrations.mockResolvedValue({ rows: [row] });
+  mocks.listRegistrations.mockResolvedValue({ rows: [row], total: 1 });
 });
 
 describe("GET /registrations/export", () => {
@@ -73,5 +73,42 @@ describe("GET /registrations/export", () => {
       "RR-AAAAAAA1,5k,'=Juana,Dela Cruz,j•••@example.com,•••01,M,paid,800.00,gcash," +
         "2026-10-01T02:00:00.000Z,,2026-10-01T01:55:00.000Z",
     );
+  });
+
+  it("refuses with a 413 past the cap, as plain text and not a download", async () => {
+    mocks.listRegistrations.mockResolvedValue({ rows: [row], total: 10_001 });
+    const response = await GET(new Request("http://admin.test/registrations/export"));
+    expect(response.status).toBe(413);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Content-Type")).toBe("text/plain; charset=utf-8");
+    expect(response.headers.get("Content-Disposition")).toBeNull();
+    const body = await response.text();
+    expect(body).toContain("Narrow the filters");
+    expect(body).toContain("10001");
+    expect(body).not.toContain(row.reference);
+  });
+
+  it("still exports exactly at the cap", async () => {
+    mocks.listRegistrations.mockResolvedValue({ rows: [row], total: 10_000 });
+    const response = await GET(new Request("http://admin.test/registrations/export"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("text/csv; charset=utf-8");
+  });
+
+  it("writes the owner's +63 mobile unprefixed", async () => {
+    mocks.requireSession.mockResolvedValue({ userId: "u2", name: "Owner", role: "owner" });
+    mocks.listRegistrations.mockResolvedValue({
+      rows: [{ ...row, mobile: "+639171234567" }],
+      total: 1,
+    });
+    const response = await GET(new Request("http://admin.test/registrations/export"));
+    const line = (await response.text()).split("\r\n")[1]!;
+    expect(line).toContain(",+639171234567,");
+    expect(line).not.toContain("'+63");
+  });
+
+  it("leaves the viewer's masked mobile as the query returned it", async () => {
+    const response = await GET(new Request("http://admin.test/registrations/export"));
+    expect((await response.text()).split("\r\n")[1]).toContain(",•••01,");
   });
 });

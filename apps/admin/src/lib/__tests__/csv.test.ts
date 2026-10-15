@@ -2,13 +2,28 @@ import { describe, expect, it } from "vitest";
 import { csvCell, toCsv } from "../csv";
 
 describe("csvCell", () => {
-  it.each(["=SUM(A1:A9)", "+63917", "-1+1", "@cmd", "\tcmd", "\rcmd"])(
-    "escapes %j so a spreadsheet reads it as text",
-    (value) => {
-      const cell = csvCell(value);
-      expect(cell.replace(/^"/, "").startsWith("'")).toBe(true);
-    },
-  );
+  it.each([
+    "=SUM(A1:A9)",
+    "=1+1",
+    "-1+1",
+    "@cmd",
+    "@x",
+    "\tcmd",
+    "\rcmd",
+    "+63 917",
+    "+1+1",
+    "+cmd|' /C calc'!A0",
+    '+HYPERLINK("x")',
+    "+",
+    "-639171234567",
+  ])("escapes %j so a spreadsheet reads it as text", (value) => {
+    const cell = csvCell(value);
+    expect(cell.replace(/^"/, "").startsWith("'")).toBe(true);
+  });
+
+  it("leaves a plus sign followed only by digits readable", () => {
+    expect(csvCell("+639171234567")).toBe("+639171234567");
+  });
 
   it("escapes a formula that also needs quoting", () => {
     expect(csvCell('=HYPERLINK("http://x","y")')).toBe('"\'=HYPERLINK(""http://x"",""y"")"');
