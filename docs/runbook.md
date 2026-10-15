@@ -396,6 +396,35 @@ its database role can't read the auth tables.
   **site's** Vercel project (Production and Preview), then redeploy. It is the only dashboard
   detail the public site holds. Without it, only that link returns 500.
 
+## Security headers
+
+- **What is sent.** Every page of the runner site gets a `Content-Security-Policy` with a fresh
+  nonce per request, from `apps/web/proxy.ts` (policy in `apps/web/src/lib/csp.ts`). Scripts run
+  only with that nonce (`'strict-dynamic'`, no `'unsafe-inline'`, and `'unsafe-eval'` only under
+  `next dev`); Turnstile's `https://challenges.cloudflare.com` is allowed for scripts, calls and
+  its iframe; the site can't be framed (`frame-ancestors 'none'`). `upgrade-insecure-requests` is
+  added only when `VERCEL_ENV=production`, so `next start` on `http://localhost` stays on http.
+  There is deliberately no `form-action`: without JavaScript the register form answers with a 303
+  to PayMongo's checkout, and `form-action` would block that redirect.
+  `apps/web/next.config.ts` adds `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin` and a `Permissions-Policy` that turns off
+  camera, microphone, geolocation, payment and USB, on every response. `/api/*` gets no CSP (the
+  proxy skips it) and keeps `Cache-Control: no-store`. Vercel sends HSTS itself.
+- **Check it:** `curl -sI https://<site>/ | grep -i content-security-policy` shows one policy with
+  a `'nonce-…'`, different on each request.
+- **Reading a violation.** Browser dev tools → Console: a blocked resource logs
+  `Refused to load …` / `Refused to execute …` / `Refused to frame …`, naming the directive and
+  the URL. A broken widget, menu or form with such a line is the policy, not the code. On a
+  Preview deploy, a `vercel.live` violation is the Vercel Toolbar, which has no nonce (and
+  `'strict-dynamic'` ignores host allowlists): turn the toolbar off for the project or do the
+  console check on Production.
+- **Adding a third party.** A new script, iframe or fetch origin must be added to the matching
+  directive in `apps/web/src/lib/csp.ts`, with a test in `apps/web/src/lib/__tests__/csp.test.ts`.
+  Components need no `nonce` prop: Next adds the nonce from the request's policy.
+- **Local check:** the always-pass Turnstile site key `1x00000000000000000000AA` loads the real
+  widget from Cloudflare, so it exercises the policy, but it works only outside production (see
+  Bot protection above).
+
 ## Roll back
 
 - **App:** Vercel dashboard → Deployments → the last good production deploy → **Instant
