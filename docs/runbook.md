@@ -436,6 +436,50 @@ its database role can't read the auth tables.
   widget from Cloudflare, so it exercises the policy, but it works only outside production (see
   Bot protection above).
 
+## Browser smoke tests (CI)
+
+`packages/e2e` (`@rr/e2e`) is a Playwright suite in Chromium. CI's `verify` job runs it right after
+`pnpm build`, so a failure blocks the merge like any other step.
+
+- **What it checks.** The "Fictional event · Test mode, no real payments" banner on every page
+  of the site (the 404 included) and on the dashboard's `/login`; `Cache-Control: no-store` on
+  `/api/*`; the nonce CSP (a new nonce per request, `frame-ancestors 'none'` enforced by the
+  browser, no violations, no third-party requests) and the security headers above; the webhook
+  answering 401 to a missing or bad `Paymongo-Signature` before it touches the database;
+  registration paused without a Turnstile key; `/register/success` ignoring URL parameters that
+  claim a payment; the retention period on `/privacy`; the dummy webhook secret absent from `/`,
+  its RSC payload and `/api/health`, and the dummy auth secret and any `postgres://` URL absent
+  from `/login`; the dashboard redirecting to `/login` when signed out (prefetches too), and
+  `/api/auth/*` answering 404 to sign-up and anything else off the allowlist.
+- **How it runs.** `packages/e2e/playwright.config.ts` starts both apps with `next start` from the
+  existing build (site on 3000, dashboard on 3001), with dummy env and no database. Every key the
+  apps read that it doesn't set is passed empty, so a local `apps/*/.env.local` can't supply it
+  (`next start` never overrides a variable the process already has). It runs no `next build`:
+  without `.next` the servers don't start. Ports 3000 and 3001 must be free: a server already on
+  them (say a `next dev` with your real `.env.local`) is never reused, so the run fails at once.
+- **What it can't check.** A real database, PayMongo, Resend or Turnstile: see Pre-release
+  verification. Two more gaps: `GET /api/auth/get-session` answers 500 without a database (the
+  auth router's rate limiter is stored there), so the specs check only its headers. And a known
+  bug: the dashboard's 404 page is prerendered without a CSP nonce, so the browser blocks its
+  scripts; any session cookie, even a forged one, gets past the proxy to it. A test pins the
+  blocked scripts and fails once a dynamic `apps/admin/app/not-found.tsx` fixes it: then make it
+  assert no violations.
+- **Run it locally.** Once: `pnpm --filter @rr/e2e exec playwright install chromium`. Then, from
+  the repo root, with nothing on 3000 or 3001:
+  ```sh
+  pnpm build && pnpm e2e
+  ```
+- **A failed CI run.** The run's summary page → Artifacts → `playwright-report` (kept 7 days; it
+  holds only dummy-env pages). Unzip it, then (the command runs in `packages/e2e`, so give an
+  absolute path):
+  ```sh
+  pnpm --filter @rr/e2e exec playwright show-report /absolute/path/to/unzipped/playwright-report
+  ```
+  `test-results/` next to it holds each failed test's output. CI retries a failed test once, so
+  a test that passes on the retry shows as flaky, not failed.
+- **Adding a third party.** Add the origin to the CSP first (Security headers above), then to
+  these specs: the web suite fails on any request from `/` to an origin other than the site's own.
+
 ## Roll back
 
 - **App:** Vercel dashboard → Deployments → the last good production deploy → **Instant
