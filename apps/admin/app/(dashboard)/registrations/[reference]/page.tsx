@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 import { formatPeso } from "@/components/stat-card";
 import { canSeePersonalData } from "@/lib/auth/roles";
 import { requireSession } from "@/lib/auth/session";
-import { LIST_PATH } from "@/lib/search-params";
+import { listHref, parseListParams, type SearchParams } from "@/lib/search-params";
 
 export const metadata: Metadata = { title: "Registration" };
 
@@ -54,11 +54,14 @@ const NOT_YET = <span className="text-line">Not yet</span>;
  */
 export default async function RegistrationPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ reference: string }>;
+  searchParams: Promise<SearchParams>;
 }) {
   const session = await requireSession();
   const { reference } = await params;
+  const list = parseListParams(await searchParams);
   const registration = await getRegistration(getDb(), session.role, reference);
   if (!registration) notFound();
   const unmasked = canSeePersonalData(session.role);
@@ -68,7 +71,7 @@ export default async function RegistrationPage({
   return (
     <main className="mx-auto flex max-w-[860px] flex-col gap-6 px-4 py-8 sm:px-7 sm:py-10">
       <div className="flex flex-col gap-3">
-        <Link href={LIST_PATH} className="text-sm font-semibold underline underline-offset-4">
+        <Link href={listHref(list)} className="text-sm font-semibold underline underline-offset-4">
           ← Registrations
         </Link>
         <h1 className="disp text-4xl">

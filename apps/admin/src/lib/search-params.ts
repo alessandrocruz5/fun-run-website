@@ -100,6 +100,13 @@ export function exportHref(params: ListParams): string {
   return query ? `${EXPORT_PATH}?${query}` : EXPORT_PATH;
 }
 
+/** A registration's detail page, carrying the list's search, filters, sort and page so "back" restores them. */
+export function detailHref(params: ListParams, reference: string): string {
+  const path = `${LIST_PATH}/${encodeURIComponent(reference)}`;
+  const query = listHref(params).split("?")[1];
+  return query ? `${path}?${query}` : path;
+}
+
 /** The link behind a column header: flips the direction of the current sort, else its default. */
 export function sortHref(params: ListParams, sort: SortKey): string {
   const dir = params.sort === sort ? (params.dir === "asc" ? "desc" : "asc") : DEFAULT_DIR[sort];

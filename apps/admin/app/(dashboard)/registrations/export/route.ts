@@ -4,7 +4,10 @@ import { requireSession } from "@/lib/auth/session";
 import { toCsv } from "@/lib/csv";
 import { parseListParams, type SearchParams } from "@/lib/search-params";
 
-/** A safety cap: the weekly reseed keeps the table to a few hundred rows. */
+/**
+ * The most rows one export holds. Past it the export is refused (413) rather than cut short, so a
+ * file is never silently incomplete. The weekly reseed keeps the table to a few hundred rows.
+ */
 const EXPORT_LIMIT = 10_000;
 
 const HEADER = [
@@ -42,11 +45,21 @@ export async function GET(request: Request) {
   for (const key of new Set(searchParams.keys())) query[key] = searchParams.getAll(key);
   const params = parseListParams(query);
 
-  const { rows } = await listRegistrations(getDb(), session.role, {
+  const { rows, total } = await listRegistrations(getDb(), session.role, {
     ...params,
     page: 1,
     pageSize: EXPORT_LIMIT,
   });
+
+  if (total > EXPORT_LIMIT) {
+    return new Response(
+      `Too many rows to export (${total}, the limit is ${EXPORT_LIMIT}). Narrow the filters and try again.`,
+      {
+        status: 413,
+        headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+      },
+    );
+  }
 
   const csv = toCsv(
     HEADER,

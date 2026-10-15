@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_LIST_PARAMS,
+  detailHref,
   exportHref,
   hasFilters,
   listHref,
@@ -117,5 +118,48 @@ describe("exportHref", () => {
   it("carries the search, filters and sort, but not the page", () => {
     const params = parseListParams({ q: "dela cruz", race: "5k", sort: "name", page: "4" });
     expect(exportHref(params)).toBe("/registrations/export?q=dela+cruz&race=5k&sort=name&dir=desc");
+  });
+});
+
+describe("detailHref", () => {
+  it("is the plain detail page when nothing narrows the list", () => {
+    expect(detailHref(DEFAULT_LIST_PARAMS, "RR-AAAAAAA1")).toBe("/registrations/RR-AAAAAAA1");
+  });
+
+  it("carries the search, filters, sort and page", () => {
+    const params = parseListParams({
+      q: "dela cruz",
+      race: "5k",
+      status: "paid",
+      size: "M",
+      sort: "name",
+      dir: "asc",
+      page: "3",
+    });
+    expect(detailHref(params, "RR-AAAAAAA1")).toBe(
+      "/registrations/RR-AAAAAAA1?q=dela+cruz&race=5k&status=paid&size=M&sort=name&dir=asc&page=3",
+    );
+  });
+
+  it("only turns whitelisted values back into a URL", () => {
+    const params = parseListParams({ q: "<script>", race: "bogus", sort: "nope", page: "-2" });
+    expect(params.race).toBeNull();
+    expect(detailHref(params, "RR-AAAAAAA1")).toBe("/registrations/RR-AAAAAAA1?q=%3Cscript%3E");
+  });
+
+  it("URL-encodes the reference", () => {
+    expect(detailHref(DEFAULT_LIST_PARAMS, "RR/../x?y#z")).toBe(
+      "/registrations/RR%2F..%2Fx%3Fy%23z",
+    );
+  });
+
+  it("round-trips: the back link restores the list the detail link came from", () => {
+    const params = parseListParams({ q: "dela", race: "5k" });
+    const detail = detailHref(params, "RR-AAAAAAA1");
+    const query = detail.split("?")[1];
+    expect(detail).toBe("/registrations/RR-AAAAAAA1?q=dela&race=5k");
+    expect(listHref(parseListParams(Object.fromEntries(new URLSearchParams(query))))).toBe(
+      "/registrations?q=dela&race=5k",
+    );
   });
 });
