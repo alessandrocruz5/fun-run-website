@@ -33,6 +33,12 @@ export const ABANDONED_AFTER_HOURS = 24;
 /** How many days "registrations per day" covers, today included. */
 export const DAILY_WINDOW_DAYS = 60;
 
+/**
+ * Keep in step with `SITE.retentionDays` (apps/web/src/content/site.ts) and /privacy: the weekly
+ * reseed is what enforces it.
+ */
+export const RETENTION_DAYS = 7;
+
 export const AGE_GROUPS = [
   { label: "Under 18", minAge: 0 },
   { label: "18–29", minAge: 18 },
@@ -50,6 +56,11 @@ export type Overview = {
   races: RaceTotals[];
   totals: Money & { paid: number };
   abandoned: number;
+  /**
+   * Visitor registrations older than RETENTION_DAYS: the weekly reseed is overdue when this is
+   * above 0. Demo rows (visibly fake +63900000xxxx mobiles, seeded across 60 days) are excluded.
+   */
+  pastRetention: number;
   /** Paid registrations per race-local day of registration, oldest first, zero-filled. */
   daily: { day: string; paid: number }[];
   /** Paid runners by age today, in `AGE_GROUPS` order. */
@@ -94,12 +105,13 @@ export async function getOverview(db: Db, { now = new Date() }: { now?: Date } =
   );
   const windowStart = new Date(`${days[0]}T00:00:00${UTC_OFFSET}`);
   const abandonedBefore = new Date(now.getTime() - ABANDONED_AFTER_HOURS * 3_600_000);
+  const retainedSince = new Date(now.getTime() - RETENTION_DAYS * 86_400_000);
   // A runner is at least N years old when born on or before this date.
   const cutoffs = AGE_GROUPS.map((g) => yearsBefore(today, g.minAge));
   // TIME_ZONE as a literal, not a parameter, so GROUP BY can repeat the expression verbatim.
   const createdDay = sql<string>`to_char(${r.createdAt} at time zone 'Asia/Manila', 'YYYY-MM-DD')`;
 
-  const [raceRows, [abandonedRow], dailyRows, [ageRow], sizeRows] = await Promise.all([
+  const [raceRows, [abandonedRow], [staleRow], dailyRows, [ageRow], sizeRows] = await Promise.all([
     db
       .select({
         race: r.race,
@@ -117,6 +129,12 @@ export async function getOverview(db: Db, { now = new Date() }: { now?: Date } =
       .where(
         and(ne(r.status, "paid"), or(eq(r.status, "cancelled"), lt(r.createdAt, abandonedBefore))),
       ),
+    // Every status: pending and cancelled rows hold personal data too. The pattern is the seed's
+    // DEMO_MOBILE_PATTERN (../seed-registrations.ts), as a literal.
+    db
+      .select({ count: count() })
+      .from(r)
+      .where(and(lt(r.createdAt, retainedSince), sql`${r.mobile} !~ '^\\+63900000[0-9]{4}$'`)),
     db
       .select({ day: createdDay, paid: count() })
       .from(r)
@@ -168,6 +186,7 @@ export async function getOverview(db: Db, { now = new Date() }: { now?: Date } =
     races,
     totals,
     abandoned: abandonedRow?.count ?? 0,
+    pastRetention: staleRow?.count ?? 0,
     daily: days.map((day) => ({ day, paid: perDay.get(day) ?? 0 })),
     ageGroups: AGE_GROUPS.map((g) => ({ label: g.label, count: ageRow?.[g.label] ?? 0 })),
     shirtSizes: RACE_IDS.map((race) => {

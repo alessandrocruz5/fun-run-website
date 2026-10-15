@@ -21,6 +21,7 @@ import {
   getRegistration,
   listRegistrations,
   localDay,
+  RETENTION_DAYS,
   SHIRT_SIZES,
 } from "../queries";
 
@@ -493,5 +494,97 @@ describe("getOverview at the boundaries", () => {
   it("counts an unpaid checkout as abandoned only after more than 24 hours", async () => {
     const { abandoned } = await getOverview(edgeDb, { now: NOW });
     expect(abandoned).toBe(2);
+  });
+});
+
+describe("getOverview past retention", () => {
+  let fresh: PGlite;
+  let freshDb: Db;
+
+  function visitor(overrides: Partial<typeof registrations.$inferInsert>) {
+    const createdAt = overrides.createdAt ?? NOW;
+    return {
+      race: "5k",
+      firstName: "Real",
+      lastName: "Visitor",
+      email: "visitor@example.com",
+      mobile: "+639171234567",
+      birthdate: "1990-01-01",
+      sex: "female",
+      shirtSize: "M",
+      emergencyContactName: "Visitor Contact",
+      emergencyContactMobile: "+639181234567",
+      consentAt: createdAt,
+      amountCentavos: RACES["5k"].priceCentavos,
+      status: "pending",
+      createdAt,
+      ...overrides,
+    } satisfies typeof registrations.$inferInsert;
+  }
+
+  /** Replaces every registration as the owner, then queries as `rr_admin` again. */
+  async function given(rows: (typeof registrations.$inferInsert)[]) {
+    await fresh.exec("RESET ROLE");
+    await seedRegistrations(freshDb, rows);
+    await fresh.exec("SET ROLE rr_admin");
+  }
+
+  const ago = (days: number, ms = 0) => new Date(NOW.getTime() - days * DAY_MS - ms);
+  const pastRetention = async () => (await getOverview(freshDb, { now: NOW })).pastRetention;
+
+  beforeAll(async () => {
+    fresh = new PGlite();
+    freshDb = drizzle({ client: fresh, schema });
+    await migrate(freshDb, { migrationsFolder });
+  });
+
+  afterAll(async () => {
+    await fresh.close();
+  });
+
+  it("is 0 with no registrations", async () => {
+    await given([]);
+    expect(await pastRetention()).toBe(0);
+  });
+
+  it.each(["pending", "paid", "cancelled"] as const)(
+    "counts a %s visitor registration 8 days old",
+    async (status) => {
+      await given([
+        visitor({ status, paidAt: status === "paid" ? ago(8) : null, createdAt: ago(8) }),
+      ]);
+      expect(await pastRetention()).toBe(1);
+    },
+  );
+
+  it("ignores a visitor registration 6 days old", async () => {
+    await given([visitor({ createdAt: ago(6) })]);
+    expect(await pastRetention()).toBe(0);
+  });
+
+  it(`counts a registration only once it is more than ${RETENTION_DAYS} days old`, async () => {
+    await given([visitor({ createdAt: ago(RETENTION_DAYS) })]);
+    expect(await pastRetention()).toBe(0);
+    await given([visitor({ createdAt: ago(RETENTION_DAYS, 1) })]);
+    expect(await pastRetention()).toBe(1);
+  });
+
+  it("ignores the demo seed's rows, however old", async () => {
+    const demo = buildDemoRegistrations({ now: ago(40), days: 1 });
+    expect(demo).toHaveLength(DEMO_SEED_COUNT);
+    await given(demo);
+    expect(await pastRetention()).toBe(0);
+  });
+
+  it("counts only the old visitor rows in a mixed set", async () => {
+    await given([
+      ...buildDemoRegistrations({ now: NOW }),
+      visitor({ createdAt: ago(8) }),
+      visitor({ status: "cancelled", createdAt: ago(30) }),
+      visitor({ status: "paid", paidAt: ago(10), createdAt: ago(10) }),
+      visitor({ createdAt: ago(6) }),
+      visitor({ status: "paid", paidAt: ago(1), createdAt: ago(1) }),
+    ]);
+    expect(await pastRetention()).toBe(3);
   });
 });

@@ -1,5 +1,10 @@
 import { getDb } from "@rr/db";
-import { ABANDONED_AFTER_HOURS, DAILY_WINDOW_DAYS, getOverview } from "@rr/db/admin";
+import {
+  ABANDONED_AFTER_HOURS,
+  DAILY_WINDOW_DAYS,
+  getOverview,
+  RETENTION_DAYS,
+} from "@rr/db/admin";
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -46,6 +51,15 @@ export default async function OverviewPage() {
             : "You're exploring the demo: runners' email, mobile, birthdate and emergency contact are masked."}{" "}
           Money and runner counts include paid registrations only.
         </p>
+        {/* Owner only: the viewer can't run the reseed. A count, no personal data. */}
+        {canSeePersonalData(session.role) && overview.pastRetention > 0 && (
+          <p role="status" className="m-0 rounded-input bg-error-bg px-4 py-3 text-sm text-error">
+            {formatCount(overview.pastRetention)} visitor{" "}
+            {overview.pastRetention === 1 ? "registration is" : "registrations are"} older than{" "}
+            {RETENTION_DAYS} days. /privacy promises deletion within {RETENTION_DAYS} days: run the
+            weekly reseed (runbook → Organizer dashboard → Demo data).
+          </p>
+        )}
       </div>
 
       <dl className="m-0 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
