@@ -6,7 +6,24 @@ const nextConfig: NextConfig = {
   // A header set here overrides the route's own: API responses are never shared-cached, and a
   // route that should be cacheable needs an explicit exception in this list.
   async headers() {
-    return [{ source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store" }] }];
+    return [
+      { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store" }] },
+      // Static security headers for every response. The CSP needs a per-request nonce, so it is
+      // set in proxy.ts, not here.
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          // Reference numbers are in URL paths, so no referrer leaves the origin. Not `no-referrer`:
+          // it sends `Origin: null` on same-origin POSTs, which Next's server-action check rejects.
+          { key: "Referrer-Policy", value: "same-origin" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+          },
+        ],
+      },
+    ];
   },
 };
 

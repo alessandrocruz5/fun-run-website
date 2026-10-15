@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getTurnstileSiteKey, verifyTurnstile } from "../turnstile";
+import { getTurnstileSiteKey, isTurnstileTestKey, verifyTurnstile } from "../turnstile";
 
 /**
  * Cloudflare's published test secret keys (developers.cloudflare.com/turnstile/troubleshooting/
@@ -168,6 +168,68 @@ describe("verifyTurnstile", () => {
     expect(JSON.stringify(consoleError.mock.calls)).not.toContain(TOKEN);
     expect(JSON.stringify(consoleError.mock.calls)).not.toContain(ALWAYS_PASS);
   });
+
+  it.each([
+    ["always-pass", ALWAYS_PASS],
+    ["always-fail", ALWAYS_FAIL],
+    ["already-spent", ALREADY_SPENT],
+  ])(
+    "refuses Cloudflare's %s test secret in production, without calling Cloudflare",
+    async (_case, secret) => {
+      const fetch = fakeSiteverify();
+      vi.stubGlobal("fetch", fetch);
+
+      await expect(
+        verifyTurnstile(TOKEN, { TURNSTILE_SECRET_KEY: secret, VERCEL_ENV: "production" }),
+      ).resolves.toEqual({ ok: false, reason: "unavailable" });
+      expect(fetch).not.toHaveBeenCalled();
+      expect(consoleError).toHaveBeenCalledWith("turnstile.test_key_in_production", {
+        key: "TURNSTILE_SECRET_KEY",
+      });
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(secret);
+    },
+  );
+
+  it("checks the token with a real secret in production", async () => {
+    const fetch = fakeSiteverify();
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(
+      verifyTurnstile(TOKEN, {
+        TURNSTILE_SECRET_KEY: "0x4AAAAAAAtest0000000000000000000",
+        VERCEL_ENV: "production",
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("still accepts the always-pass test secret in Preview", async () => {
+    const fetch = fakeSiteverify();
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(
+      verifyTurnstile(TOKEN, { TURNSTILE_SECRET_KEY: ALWAYS_PASS, VERCEL_ENV: "preview" }),
+    ).resolves.toEqual({ ok: true });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("isTurnstileTestKey", () => {
+  it.each([
+    ["1x00000000000000000000AA", true],
+    ["2x00000000000000000000AB", true],
+    ["3x00000000000000000000FF", true],
+    [ALWAYS_PASS, true],
+    [ALWAYS_FAIL, true],
+    [ALREADY_SPENT, true],
+    ["0x4AAAAAAAtest0000000000000000000", false],
+    ["0x4AAAAAAA-a-real-looking-secret", false],
+    ["4x00000000000000000000AA", false],
+    ["1x0000000001", false],
+    ["", false],
+  ])("%s → %s", (value, expected) => {
+    expect(isTurnstileTestKey(value)).toBe(expected);
+  });
 });
 
 describe("getTurnstileSiteKey", () => {
@@ -175,6 +237,34 @@ describe("getTurnstileSiteKey", () => {
     expect(getTurnstileSiteKey({ TURNSTILE_SITE_KEY: "1x00000000000000000000AA" })).toBe(
       "1x00000000000000000000AA",
     );
+  });
+
+  it("returns a test site key in Preview", () => {
+    expect(
+      getTurnstileSiteKey({
+        TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
+        VERCEL_ENV: "preview",
+      }),
+    ).toBe("1x00000000000000000000AA");
+  });
+
+  it("returns null, and logs the key's name, for a test site key in production", () => {
+    expect(
+      getTurnstileSiteKey({
+        TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
+        VERCEL_ENV: "production",
+      }),
+    ).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith("turnstile.test_key_in_production", {
+      key: "TURNSTILE_SITE_KEY",
+    });
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain("1x00000000000000000000AA");
+  });
+
+  it("returns a real site key in production", () => {
+    expect(
+      getTurnstileSiteKey({ TURNSTILE_SITE_KEY: "0x4AAAAAAAsite00000", VERCEL_ENV: "production" }),
+    ).toBe("0x4AAAAAAAsite00000");
   });
 
   it("returns null, and logs the key at fault, when it isn't set", () => {

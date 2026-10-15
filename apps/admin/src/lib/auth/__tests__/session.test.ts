@@ -11,7 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import DashboardLayout from "../../../../app/(dashboard)/layout";
 import OverviewPage from "../../../../app/(dashboard)/page";
 import LoginPage from "../../../../app/login/page";
-import { proxy } from "../../../../proxy";
+import { config, proxy } from "../../../../proxy";
 import { signIn } from "../server";
 import { endSession, requireSession } from "../session";
 
@@ -198,21 +198,79 @@ describe("login page", () => {
 });
 
 describe("proxy", () => {
+  function nonceOf(csp: string | null): string | undefined {
+    return /'nonce-([^']+)'/.exec(csp ?? "")?.[1];
+  }
+
+  function visit(path: string, cookie?: string) {
+    return proxy(
+      new NextRequest(`http://localhost:3001${path}`, cookie ? { headers: { cookie } } : {}),
+    );
+  }
+
   it.each(["/", "/registrations", "/registrations/RR-7K3QX9TD", "/registrations/export"])(
-    "redirects %s to /login without a session cookie",
+    "redirects %s to /login without a session cookie, with a CSP",
     (path) => {
-      const response = proxy(new NextRequest(`http://localhost:3001${path}`));
+      const response = visit(path);
+      expect(response.status).toBe(307);
+      expect(response.headers.get("location")).toBe("http://localhost:3001/login");
+      expect(nonceOf(response.headers.get("content-security-policy"))).toBeTruthy();
+    },
+  );
+
+  it("matches every path but static assets, prefetches included", () => {
+    // A string matcher has no `missing` entry, so router prefetches are still redirected.
+    expect(config.matcher).toHaveLength(1);
+    expect(config.matcher.every((entry) => typeof entry === "string")).toBe(true);
+    const matcher = new RegExp(`^${config.matcher[0]}$`);
+    expect(matcher.test("/")).toBe(true);
+    expect(matcher.test("/registrations")).toBe(true);
+    expect(matcher.test("/login")).toBe(true);
+    expect(matcher.test("/api/auth/sign-in/email")).toBe(true);
+    expect(matcher.test("/_next/static/chunks/main.js")).toBe(false);
+    expect(matcher.test("/_next/image")).toBe(false);
+    expect(matcher.test("/favicon.ico")).toBe(false);
+    expect(matcher.test("/robots.txt")).toBe(false);
+  });
+
+  it.each(["/login", "/api/auth", "/api/auth/get-session"])(
+    "lets %s through without a session cookie, with a CSP",
+    (path) => {
+      const response = visit(path);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+      expect(response.headers.get("location")).toBeNull();
+
+      const csp = response.headers.get("content-security-policy");
+      expect(nonceOf(csp)).toBe(response.headers.get("x-middleware-request-x-nonce"));
+      // Next reads the nonce from the request's copy of the policy.
+      expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(csp);
+    },
+  );
+
+  it("lets a dashboard path with any session cookie through, with a CSP", () => {
+    // The proxy is not the check: requireSession() rejects the forged cookie (see above).
+    const response = visit("/registrations", "better-auth.session_token=forged.token");
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    const csp = response.headers.get("content-security-policy");
+    expect(nonceOf(csp)).toBeTruthy();
+    expect(nonceOf(csp)).toBe(response.headers.get("x-middleware-request-x-nonce"));
+  });
+
+  it.each(["/login-evil", "/login/x", "/loginx", "/api/authx", "/api/auth-evil"])(
+    "doesn't treat %s as public",
+    (path) => {
+      const response = visit(path);
       expect(response.status).toBe(307);
       expect(response.headers.get("location")).toBe("http://localhost:3001/login");
     },
   );
 
-  it("leaves /login and the auth API out of its matcher", async () => {
-    const { config } = await import("../../../../proxy");
-    const matcher = new RegExp(`^${config.matcher[0]}$`);
-    expect(matcher.test("/")).toBe(true);
-    expect(matcher.test("/registrations")).toBe(true);
-    expect(matcher.test("/login")).toBe(false);
-    expect(matcher.test("/api/auth/sign-in/email")).toBe(false);
+  it("gives each request a new nonce", () => {
+    const first = visit("/login");
+    const second = visit("/login");
+    expect(nonceOf(first.headers.get("content-security-policy"))).not.toBe(
+      nonceOf(second.headers.get("content-security-policy")),
+    );
   });
 });

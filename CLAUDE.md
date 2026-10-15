@@ -26,7 +26,11 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm e2e
 ```
+
+`pnpm e2e` needs the browser once (`pnpm --filter @rr/e2e exec playwright install chromium`) and
+runs the built apps with dummy env, so ports 3000 and 3001 must be free.
 
 `pnpm format` fixes formatting. `pnpm --filter @rr/web dev` serves the site on
 <http://localhost:3000>, and `pnpm --filter @rr/admin dev` serves the dashboard on

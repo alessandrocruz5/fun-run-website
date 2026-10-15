@@ -85,7 +85,7 @@ describe("migrations", () => {
     const { rows } = await client.query<{ n: number }>(
       "SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations",
     );
-    expect(rows[0]?.n).toBe(4);
+    expect(rows[0]?.n).toBe(5);
     await expect(migrate(drizzle({ client, schema }), { migrationsFolder })).resolves.not.toThrow();
   });
 });
