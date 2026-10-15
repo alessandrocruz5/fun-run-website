@@ -404,7 +404,8 @@ its database role can't read the auth tables.
   `next dev`); Turnstile's `https://challenges.cloudflare.com` is allowed for scripts, calls and
   its iframe; the site can't be framed (`frame-ancestors 'none'`). `upgrade-insecure-requests` is
   added only when `VERCEL_ENV=production`, so `next start` on `http://localhost` stays on http.
-  There is deliberately no `form-action`: it would block the redirect to PayMongo's checkout.
+  There is deliberately no `form-action`: without JavaScript the register form answers with a 303
+  to PayMongo's checkout, and `form-action` would block that redirect.
   `apps/web/next.config.ts` adds `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: strict-origin-when-cross-origin` and a `Permissions-Policy` that turns off
   camera, microphone, geolocation, payment and USB, on every response. `/api/*` gets no CSP (the
@@ -413,7 +414,10 @@ its database role can't read the auth tables.
   a `'nonce-…'`, different on each request.
 - **Reading a violation.** Browser dev tools → Console: a blocked resource logs
   `Refused to load …` / `Refused to execute …` / `Refused to frame …`, naming the directive and
-  the URL. A broken widget, menu or form with such a line is the policy, not the code.
+  the URL. A broken widget, menu or form with such a line is the policy, not the code. On a
+  Preview deploy, a `vercel.live` violation is the Vercel Toolbar, which has no nonce (and
+  `'strict-dynamic'` ignores host allowlists): turn the toolbar off for the project or do the
+  console check on Production.
 - **Adding a third party.** A new script, iframe or fetch origin must be added to the matching
   directive in `apps/web/src/lib/csp.ts`, with a test in `apps/web/src/lib/__tests__/csp.test.ts`.
   Components need no `nonce` prop: Next adds the nonce from the request's policy.

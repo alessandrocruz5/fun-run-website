@@ -26,12 +26,11 @@ export const config = {
   matcher: [
     {
       // Pages only: `/api/*` answers JSON (its `no-store` is set in next.config.ts), and static
-      // assets need no policy. Prefetches skip it, as Next's CSP guide recommends.
+      // assets need no policy. The App Router's own prefetches skip it, as Next's CSP guide
+      // recommends. The guide's `purpose: prefetch` entry is left out: that is a browser prefetch
+      // of the full HTML, which the browser may reuse, so it keeps its policy.
       source: "/((?!api/|_next/static|_next/image|favicon.ico).*)",
-      missing: [
-        { type: "header", key: "next-router-prefetch" },
-        { type: "header", key: "purpose", value: "prefetch" },
-      ],
+      missing: [{ type: "header", key: "next-router-prefetch" }],
     },
   ],
 };

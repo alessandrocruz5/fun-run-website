@@ -118,9 +118,15 @@ describe("proxy", () => {
     expect(matcher.test("/")).toBe(true);
     expect(matcher.test("/privacy")).toBe(true);
     expect(matcher.test("/register/success")).toBe(true);
+    expect(matcher.test("/api")).toBe(true);
+    expect(matcher.test("/apiary")).toBe(true);
     expect(matcher.test("/api/health")).toBe(false);
     expect(matcher.test("/api/webhooks/paymongo")).toBe(false);
     expect(matcher.test("/_next/static/chunks/main.js")).toBe(false);
     expect(matcher.test("/favicon.ico")).toBe(false);
+  });
+
+  it("skips only the App Router's prefetches", () => {
+    expect(config.matcher[0]?.missing).toEqual([{ type: "header", key: "next-router-prefetch" }]);
   });
 });
