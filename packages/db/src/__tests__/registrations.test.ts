@@ -313,12 +313,22 @@ describe("claimConfirmation / markConfirmationSent / releaseConfirmation", () =>
     expect(await claimConfirmation(db, row.id)).toBeNull();
   });
 
+  it("takes over a stale claim on a row paid 22 hours ago", async () => {
+    const row = await paidRegistration();
+    await claimConfirmation(db, row.id);
+    await asOwner(
+      "UPDATE registrations SET confirmation_claimed_at = now() - interval '6 minutes', " +
+        "paid_at = now() - interval '22 hours'",
+    );
+    expect(await claimConfirmation(db, row.id)).not.toBeNull();
+  });
+
   it("doesn't take over a stale claim on a row paid more than 23 hours ago", async () => {
     const row = await paidRegistration();
     await claimConfirmation(db, row.id);
     await asOwner(
       "UPDATE registrations SET confirmation_claimed_at = now() - interval '6 minutes', " +
-        "paid_at = now() - interval '24 hours'",
+        "paid_at = now() - interval '23 hours 5 minutes'",
     );
     expect(await claimConfirmation(db, row.id)).toBeNull();
   });

@@ -719,7 +719,7 @@ describe("confirmation email", () => {
     expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
   });
 
-  it("logs a duplicate (key reused with another payload) and keeps the claim", async () => {
+  it("logs a duplicate (key reused with another payload) without releasing the claim", async () => {
     vi.mocked(sendRegistrationConfirmed).mockResolvedValue({ status: "duplicate" });
     await sendConfirmation(db as unknown as Db, paidRow);
     expect(consoleWarn).toHaveBeenCalledWith("email.duplicate", { registrationId: ROW_ID });

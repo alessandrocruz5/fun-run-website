@@ -155,8 +155,9 @@ export async function markCancelled(db: Db, id: string): Promise<Registration | 
 // dies mid-send leaves only a claim, which goes stale and can be taken again.
 
 /**
- * A claim this old is abandoned: comfortably above a Vercel function's max duration, so the
- * first sender is gone.
+ * A claim this old is abandoned: no shorter than a Vercel function's maximum duration (300 s by
+ * default with Fluid compute; nothing here raises `maxDuration`), and the sender claims after its
+ * function starts, so it is gone. Raising `maxDuration` above this breaks that.
  */
 export const CLAIM_STALE_AFTER_MINUTES = 5;
 
