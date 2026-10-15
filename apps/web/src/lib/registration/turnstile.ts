@@ -9,35 +9,53 @@ import { logError } from "./confirm";
  * Cloudflare all stop the registration.
  */
 
-/** The hidden input the widget adds to the form. */
-export const TURNSTILE_FIELD = "cf-turnstile-response";
-
-/**
- * A decoy input, hidden from people. A bot that fills in every input fills this too. The name
- * is one browsers don't autofill, so a person never sets it by accident.
- */
-export const HONEYPOT_FIELD = "fax_number";
+export { HONEYPOT_FIELD, TURNSTILE_FIELD } from "./fields";
 
 const SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 /** Cloudflare's documented maximum token length. */
 const MAX_TOKEN_LENGTH = 2048;
 const VERIFY_TIMEOUT_MS = 5_000;
 
-const secretEnvSchema = baseEnvSchema.extend({ TURNSTILE_SECRET_KEY: z.string().min(1) });
-const siteEnvSchema = baseEnvSchema.extend({ TURNSTILE_SITE_KEY: z.string().min(1) });
+/**
+ * Vercel sets `VERCEL_ENV` to `production`, `preview` or `development`. `NODE_ENV` can't tell
+ * production apart: it is `production` in Preview and in CI's `next start` too.
+ */
+const secretEnvSchema = baseEnvSchema.extend({
+  TURNSTILE_SECRET_KEY: z.string().min(1),
+  VERCEL_ENV: z.string().optional(),
+});
+const siteEnvSchema = baseEnvSchema.extend({
+  TURNSTILE_SITE_KEY: z.string().min(1),
+  VERCEL_ENV: z.string().optional(),
+});
+
+/** Cloudflare's dummy keys (`1x…` always passes, `2x…`/`3x…` fail). Real keys start `0x4`. */
+const TEST_KEY = /^[123]x0{10}/;
+
+/** True for Cloudflare's dummy site and secret keys, which must never run in production. */
+export function isTurnstileTestKey(value: string): boolean {
+  return TEST_KEY.test(value);
+}
 
 /**
  * The public site key for the widget, read per request: `next build` runs with no environment
- * variables. `null` when it isn't set, so the page still renders and the form says registration
- * is paused instead of the whole site returning 500.
+ * variables. `null` when it isn't set, or is a Cloudflare test key in production, so the page
+ * still renders and the form says registration is paused instead of the whole site returning 500.
  */
 export function getTurnstileSiteKey(source?: Record<string, string | undefined>): string | null {
+  let env: z.infer<typeof siteEnvSchema>;
   try {
-    return createEnv(siteEnvSchema, source).TURNSTILE_SITE_KEY;
+    env = createEnv(siteEnvSchema, source);
   } catch (error) {
     logError("turnstile.site_key_missing", error);
     return null;
   }
+  if (env.VERCEL_ENV === "production" && isTurnstileTestKey(env.TURNSTILE_SITE_KEY)) {
+    // The key's name only, never its value.
+    console.error("turnstile.test_key_in_production", { key: "TURNSTILE_SITE_KEY" });
+    return null;
+  }
+  return env.TURNSTILE_SITE_KEY;
 }
 
 const siteverifySchema = z.object({
@@ -74,11 +92,17 @@ export async function verifyTurnstile(
     return { ok: false, reason: "missing" };
   }
 
-  let secret: string;
+  let env: z.infer<typeof secretEnvSchema>;
   try {
-    secret = createEnv(secretEnvSchema, source).TURNSTILE_SECRET_KEY;
+    env = createEnv(secretEnvSchema, source);
   } catch (error) {
     if (error instanceof EnvValidationError) logError("turnstile.env_invalid", error);
+    return { ok: false, reason: "unavailable" };
+  }
+  const secret = env.TURNSTILE_SECRET_KEY;
+  // The always-pass test secret would switch the check off: refuse every test key in production.
+  if (env.VERCEL_ENV === "production" && isTurnstileTestKey(secret)) {
+    console.error("turnstile.test_key_in_production", { key: "TURNSTILE_SECRET_KEY" });
     return { ok: false, reason: "unavailable" };
   }
 
