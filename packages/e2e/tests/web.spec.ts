@@ -83,13 +83,17 @@ test.describe("Static security headers (Sprint 3: security headers)", () => {
     test(`${path} sends nosniff, referrer-policy and permissions-policy`, async ({ request }) => {
       const headers = (await request.get(`${WEB}${path}`)).headers();
       expect(headers["x-content-type-options"]).toBe("nosniff");
-      expect(headers["referrer-policy"]).toBeTruthy();
-      expect(headers["permissions-policy"]).toBeTruthy();
+      expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+      expect(headers["permissions-policy"]).toBe(
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+      );
     });
   }
 });
 
 test.describe("API responses are never cached (Review constraint)", () => {
+  // Both routes also set `no-store` themselves, so these pass without the `/api/:path*` rule in
+  // `next.config.ts`; that rule is unit-tested in `apps/web/src/lib/__tests__/csp.test.ts`.
   test("/api/health is 200 {status: ok} with no-store", async ({ request }) => {
     const res = await request.get(`${WEB}/api/health`);
     expect(res.status()).toBe(200);

@@ -1,3 +1,5 @@
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { ADMIN } from "./origins";
 
@@ -133,21 +135,68 @@ test.describe("No sign-up and a closed auth allowlist (Review constraint: organi
 });
 
 test.describe("Not framable (Review constraint: CSP frame-ancestors 'none')", () => {
-  test("the login form does not render inside an iframe", async ({ page }) => {
-    // No watch() here: a frame-ancestors block logs a console error on the parent page.
-    await page.goto("about:blank");
-    await page.setContent(`<iframe src="${ADMIN}/login" title="victim"></iframe>`);
-    await page.waitForLoadState("load");
+  // The parent is served from another loopback origin. Chromium won't load a localhost frame into
+  // `about:blank` or a public origin at all, so those parents can't tell a CSP block apart.
+  let server: Server;
+  let parent: string;
 
-    // The browser swaps a blocked frame for its own error page, so the frame did load something.
-    await expect
-      .poll(() => page.frames().map((f) => f.url()))
-      .toContain("chrome-error://chromewebdata/");
-
-    const framed = page.frameLocator("iframe");
-    await expect(framed.getByRole("heading", { name: "Sign in" })).toHaveCount(0, {
-      timeout: 2_000,
+  test.beforeAll(async () => {
+    server = createServer((req, res) => {
+      const { port } = server.address() as AddressInfo;
+      res.setHeader("content-type", "text/html");
+      if (req.url === "/framed") {
+        res.end("<h1>Framed page</h1>");
+        return;
+      }
+      const src = req.url === "/control" ? `http://localhost:${port}/framed` : `${ADMIN}/login`;
+      res.end(`<iframe src="${src}" title="framed"></iframe>`);
     });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    parent = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  test.afterAll(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  test("control: the same parent can frame a page that allows it", async ({ page }) => {
+    await page.goto(`${parent}/control`);
+    await expect(
+      page.frameLocator("iframe").getByRole("heading", { name: "Framed page" }),
+    ).toBeVisible();
+  });
+
+  test("the browser refuses to frame /login", async ({ page }) => {
+    const messages: string[] = [];
+    page.on("console", (msg) => messages.push(msg.text()));
+    await page.goto(parent);
+    await expect.poll(() => messages.join("\n")).toContain("frame-ancestors 'none'");
+    await expect(page.frameLocator("iframe").getByRole("heading", { name: "Sign in" })).toHaveCount(
+      0,
+    );
+  });
+});
+
+test.describe("Known gap: the dashboard's 404 page (FRW-21 deferred Should-fix)", () => {
+  // The proxy only checks that a session cookie is present, so a forged one reaches the
+  // prerendered `/_not-found`, which has no CSP nonce: the browser blocks all its scripts. The fix
+  // is a dynamic `apps/admin/app/not-found.tsx`; once it lands, this test fails: assert
+  // `watch(page).assertClean()` instead.
+  test("an unknown path behind a forged cookie renders with its scripts blocked", async ({
+    context,
+    page,
+  }) => {
+    await context.addCookies([
+      { name: "better-auth.session_token", value: "forged.token", url: ADMIN },
+    ]);
+    const violations: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.text().includes("Content Security Policy")) violations.push(msg.text());
+    });
+    const response = await page.goto(`${ADMIN}/no-such-page`);
+    expect(response?.status()).toBe(404);
+    await expect(page.locator('aside[aria-label="Test mode"]')).toContainText(BANNER);
+    await expect.poll(() => violations.length).toBeGreaterThan(0);
   });
 });
 

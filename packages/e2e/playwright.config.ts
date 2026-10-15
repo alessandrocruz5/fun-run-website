@@ -11,11 +11,13 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Never reuse a server already on 3000/3001 (a `next dev` with the real `.env.local`): a busy
+  // port fails the run at once.
   webServer: [
     {
       command: "pnpm --filter @rr/web start",
       port: 3000,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120_000,
       // `next start` also loads the app's `.env.local`, but never over a key the process already has:
       // the empty values make a local run match CI (no database, no PayMongo, Turnstile or Resend).
@@ -30,20 +32,24 @@ export default defineConfig({
         RESEND_API_KEY: "",
         EMAIL_FROM: "",
         ADMIN_URL: "",
+        VERCEL_ENV: "",
       },
     },
     {
       command: "pnpm --filter @rr/admin start",
       port: 3001,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120_000,
       env: {
         BETTER_AUTH_URL: "http://localhost:3001",
         BETTER_AUTH_SECRET: "e2e-dummy-secret-not-for-real-use-0000",
+        // Never reachable: the Neon HTTP driver turns it into a host that doesn't parse, so every
+        // query fails at once without touching the network.
         DATABASE_URL: "postgres://e2e:e2e@127.0.0.1:1/e2e",
         NODE_ENV: "production",
         DEMO_VIEWER_EMAIL: "",
         DEMO_VIEWER_PASSWORD: "",
+        VERCEL_ENV: "",
       },
     },
   ],
