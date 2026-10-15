@@ -5,11 +5,10 @@ import Script from "next/script";
 import { type InputHTMLAttributes, useActionState, useEffect, useRef, useState } from "react";
 import type { RaceView } from "@/content/site";
 import { register } from "@/lib/registration/actions";
-import { HONEYPOT_FIELD } from "@/lib/registration/fields";
-import type { RegisterField, RegisterState } from "@/lib/registration/schema";
-
 // Types only from the schema module: the server validates, so zod stays out of the browser. The
 // honeypot's name comes from fields.ts, which has no imports: turnstile.ts is server only.
+import { HONEYPOT_FIELD } from "@/lib/registration/fields";
+import type { RegisterField, RegisterState } from "@/lib/registration/schema";
 
 type TurnstileApi = {
   render(

@@ -258,6 +258,7 @@ describe("getTurnstileSiteKey", () => {
     expect(consoleError).toHaveBeenCalledWith("turnstile.test_key_in_production", {
       key: "TURNSTILE_SITE_KEY",
     });
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain("1x00000000000000000000AA");
   });
 
   it("returns a real site key in production", () => {
