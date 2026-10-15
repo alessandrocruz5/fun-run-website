@@ -375,7 +375,9 @@ its database role can't read the auth tables.
   sessions and every sign-in rate-limit entry. `ALLOW_DEMO_SEED=1` must be on the command line:
   the script checks it before loading `.env`, so a value saved there doesn't count. It runs as separate
   statements, not one transaction, so if it fails partway, run it again. Run it on `dev`
-  first after a schema change.
+  first after a schema change. When the reseed is overdue, the owner's overview shows a notice
+  with the number of visitor registrations older than 7 days (the viewer never sees it). The
+  check ignores the seed's own fake rows (`+63900000xxxx` mobiles), which are up to 60 days old.
 - **What the dashboard shows.** The overview counts **paid rows only** for runners, gross, fees,
   net, age groups (age today) and shirt sizes. "Abandoned" is cancelled, or unpaid after 24 hours.
   Days are Manila time. The registrations list keeps its search, filters, sort and page in the URL.
