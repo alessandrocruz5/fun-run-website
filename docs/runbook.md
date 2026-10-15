@@ -411,8 +411,9 @@ its database role can't read the auth tables.
   camera, microphone, geolocation, payment and USB, on every response. `/api/*` gets no CSP (the
   proxy skips it) and keeps `Cache-Control: no-store`. Vercel sends HSTS itself.
 - **Dashboard.** The organizer dashboard gets a nonce CSP the same way, from `apps/admin/proxy.ts`
-  (policy in `apps/admin/src/lib/csp.ts`), on every response including `/login` and
-  `/api/auth/*`. It is stricter: no third-party origin at all, `form-action 'self'` (sign-in and
+  (policy in `apps/admin/src/lib/csp.ts`), on every page and API response the proxy matches,
+  including `/login` and `/api/auth/*` (Next's trailing-slash 308s and static-asset 404s are sent
+  without it). It is stricter: no third-party origin at all, `form-action 'self'` (sign-in and
   sign-out are same-origin server actions) and `frame-ancestors 'none'`. Its matcher skips only
   static assets, not router prefetches, so prefetches are still redirected.
   `apps/admin/next.config.ts` sends `Referrer-Policy: same-origin`, so reference numbers in

@@ -233,7 +233,7 @@ describe("proxy", () => {
     expect(matcher.test("/robots.txt")).toBe(false);
   });
 
-  it.each(["/login", "/api/auth/get-session"])(
+  it.each(["/login", "/api/auth", "/api/auth/get-session"])(
     "lets %s through without a session cookie, with a CSP",
     (path) => {
       const response = visit(path);
