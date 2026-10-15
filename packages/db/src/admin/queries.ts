@@ -58,7 +58,8 @@ export type Overview = {
   abandoned: number;
   /**
    * Visitor registrations older than RETENTION_DAYS: the weekly reseed is overdue when this is
-   * above 0. Demo rows (visibly fake +63900000xxxx mobiles, seeded across 60 days) are excluded.
+   * above 0. Demo rows (visibly fake +63900000xxxx mobiles, seeded across 60 days) are excluded;
+   * the form accepts that range too, but 0900 isn't an allocated PH prefix.
    */
   pastRetention: number;
   /** Paid registrations per race-local day of registration, oldest first, zero-filled. */
@@ -134,7 +135,7 @@ export async function getOverview(db: Db, { now = new Date() }: { now?: Date } =
     db
       .select({ count: count() })
       .from(r)
-      .where(and(lt(r.createdAt, retainedSince), sql`${r.mobile} !~ '^\\+63900000[0-9]{4}$'`)),
+      .where(and(lt(r.createdAt, retainedSince), sql`${r.mobile} !~ '^[+]63900000[0-9]{4}$'`)),
     db
       .select({ day: createdDay, paid: count() })
       .from(r)

@@ -576,6 +576,22 @@ describe("getOverview past retention", () => {
     expect(await pastRetention()).toBe(0);
   });
 
+  // Ties the SQL literal to DEMO_MOBILE_PATTERN: a looser pattern would hide real overdue rows.
+  it.each([
+    "+639000001234",
+    "+639000009999",
+    "+6390000012345",
+    "+639000000123",
+    "+639000001234x",
+    "x639000001234",
+    "0+639000001234",
+    "+63900000123a",
+    "+639171234567",
+  ])("treats an old row with mobile %s as the seed's iff DEMO_MOBILE_PATTERN does", async (m) => {
+    await given([visitor({ mobile: m, createdAt: ago(8) })]);
+    expect(await pastRetention()).toBe(DEMO_MOBILE_PATTERN.test(m) ? 0 : 1);
+  });
+
   it("counts only the old visitor rows in a mixed set", async () => {
     await given([
       ...buildDemoRegistrations({ now: NOW }),
