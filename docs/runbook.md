@@ -187,7 +187,9 @@ single-use token.
   secret `1x0000000000000000000000000000000AA`) switches the check off, with no error. Use them
   only in `apps/web/.env.local`. The always-fail pair is `2x00000000000000000000AB` /
   `2x0000000000000000000000000000000AA`; secret `3x0000000000000000000000000000000AA` answers
-  "token already used".
+  "token already used". In production (`VERCEL_ENV=production`) the app now refuses Cloudflare's
+  test keys: the form shows "registration is paused" and the log line is
+  `turnstile.test_key_in_production`.
 - **Fail closed:** no token, an invalid, expired or reused token, a missing secret and an
   unreachable Cloudflare all refuse the registration, with a retry message. A missing site key
   disables the pay button and says registration is paused. Nothing is saved or sent to PayMongo.
