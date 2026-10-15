@@ -3,6 +3,8 @@ updates:
   # Covers every package in the pnpm workspace (pnpm-lock.yaml at the root).
   - package-ecosystem: npm
     directory: /
+    # Units merge into develop; main only takes releases (main is the default branch).
+    target-branch: develop
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
@@ -17,5 +19,6 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
+    target-branch: develop
     schedule:
       interval: weekly

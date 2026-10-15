@@ -386,14 +386,21 @@ latest → **Redeploy**, or push a commit.
   **admin** Vercel project (Production and Preview), then redeploy. It signs every organizer out;
   no re-seed is needed.
 - **Other secrets:** roll `PAYMONGO_*`, `RESEND_API_KEY` and `TURNSTILE_SECRET_KEY` in the
-  provider's dashboard, update them in Vercel, then redeploy. For a database login, as the owner:
+  provider's dashboard, update them in Vercel, then redeploy. For a database login, as the owner,
+  on the Neon branch whose URL leaked (Production → `main`, Preview → `dev`):
   ```sql
   -- password: openssl rand -base64 32
   ALTER ROLE rr_app_login PASSWORD '<password>'; -- or rr_admin_login
   ```
   Then update that app's `DATABASE_URL` in Vercel (and `.env.local`) and redeploy.
+- **Login secrets:** for `ORGANIZER_OWNER_PASSWORD` or `DEMO_VIEWER_PASSWORD`, set a new value in
+  `packages/db/.env` and re-run `pnpm --filter @rr/db seed:organizers` on each Neon branch (see
+  Organizer dashboard). For the demo viewer, also set the same `DEMO_VIEWER_PASSWORD` in the
+  admin Vercel project and redeploy. For the owner password behind `MIGRATE_DATABASE_URL`, reset
+  it in the Neon Console and update `packages/db/.env` only; it is never in Vercel.
 - **Don't rewrite `main`'s history.** Rotation makes the old value dead; a force-push breaks every
   clone and open PR and doesn't remove copies GitHub or others already have.
-- **Catching the next one:** the CI `secrets` job (gitleaks) fails a PR or push that adds a
-  secret, and GitHub's secret scanning and push protection (repo Settings → Code security) flag
-  known token formats.
+- **Catching the next one:** the CI `secrets` job (gitleaks) fails a PR or a push to `develop` or
+  `main` that adds a secret. By then the secret is already on GitHub, so rotate it anyway. GitHub's
+  secret scanning and push protection (repo Settings → Code security) only know provider token
+  formats: they won't catch a random value like `BETTER_AUTH_SECRET`.
