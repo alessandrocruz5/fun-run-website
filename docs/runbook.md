@@ -410,6 +410,16 @@ its database role can't read the auth tables.
   `Referrer-Policy: strict-origin-when-cross-origin` and a `Permissions-Policy` that turns off
   camera, microphone, geolocation, payment and USB, on every response. `/api/*` gets no CSP (the
   proxy skips it) and keeps `Cache-Control: no-store`. Vercel sends HSTS itself.
+- **Dashboard.** The organizer dashboard gets a nonce CSP the same way, from `apps/admin/proxy.ts`
+  (policy in `apps/admin/src/lib/csp.ts`), on every response including `/login` and
+  `/api/auth/*`. It is stricter: no third-party origin at all, `form-action 'self'` (sign-in and
+  sign-out are same-origin server actions) and `frame-ancestors 'none'`. Its matcher skips only
+  static assets, not router prefetches, so prefetches are still redirected.
+  `apps/admin/next.config.ts` sends `Referrer-Policy: same-origin`, so reference numbers in
+  dashboard URLs never leave the origin; not `no-referrer`, which sends `Origin: null` on
+  same-origin POSTs and makes Next reject every server action (sign-in, the demo button,
+  sign-out). The proxy still only redirects on a missing cookie: `requireSession()` in the layout
+  and every data function is the check.
 - **Check it:** `curl -sI https://<site>/ | grep -i content-security-policy` shows one policy with
   a `'nonce-…'`, different on each request.
 - **Reading a violation.** Browser dev tools → Console: a blocked resource logs
