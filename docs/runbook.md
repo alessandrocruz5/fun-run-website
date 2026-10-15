@@ -480,6 +480,72 @@ its database role can't read the auth tables.
 - **Adding a third party.** Add the origin to the CSP first (Security headers above), then to
   these specs: the web suite fails on any request from `/` to an origin other than the site's own.
 
+## Pre-release verification
+
+Before the `develop` → `main` release, the owner must verify the items below against production
+accounts and the production Vercel/GitHub/Neon projects. Code checks these constraints, but only the
+owner can confirm real accounts, real mail, real Turnstile keys and operational rules.
+
+- [ ] **Secret rotation.** `BETTER_AUTH_SECRET` was exposed in git at commit `c5efb3f` (2026-10-15).
+  Confirm it was rotated in the admin Vercel project (both Production and Preview) and the dashboard
+  redeployed. Do not paste the new value anywhere. See [Incidents → Secret exposure](#incidents).
+- [ ] **GitHub.** Settings → Code security: **secret scanning** and **push protection** are on.
+  Dependabot shows version-update PRs after the first week. The `secrets` job (gitleaks) and `verify`
+  job (with e2e) are both green on `main`.
+- [ ] **Migration 0004** (`confirmation_claimed_at`). Apply it to Neon `dev` first, then to `main`,
+  before deploying the web app. See [Migrations](#migrations). Afterwards:
+  ```sh
+  psql "$MIGRATE_DATABASE_URL" -c "SELECT COUNT(*) FROM registrations WHERE confirmation_claimed_at IS NOT NULL;"
+  ```
+  Should show a count (confirmed the column exists).
+- [ ] **Real email.** On the production site, pay a test registration using an address you control.
+  Exactly one email arrives with both HTML and plain-text parts. Check the dashboard detail page:
+  it shows "email sent" with a timestamp. Reload `/register/success` and resend the webhook event
+  from the PayMongo dashboard: the email count stays at one. See [Email (Resend) → Check it](#email-resend).
+- [ ] **Stuck-claim self-heal** (optional, on `dev`). As the owner, update a paid test row:
+  ```sql
+  UPDATE registrations SET confirmation_sent_at = NULL,
+    confirmation_claimed_at = now() - interval '10 minutes'
+  WHERE reference = '<RR-…>' AND status = 'paid';
+  ```
+  Reload that runner's `/register/success`: the email is re-sent once and `confirmation_sent_at`
+  is set. See [Email (Resend) → Stuck claim](#email-resend).
+- [ ] **Webhook retries.** From the PayMongo dashboard, resend an event that was originally delivered
+  more than 5 minutes ago. Note whether it gets a 401 `stale` response. This answers the open FRW-6
+  question about webhook retry signatures. See [Webhook (PayMongo test mode) → End-to-end check](#webhook-paymongo-test-mode).
+- [ ] **Turnstile on a phone.** Test the registration form on the Preview deploy from a real phone:
+  the Cloudflare Turnstile widget renders and the form submits. Also confirm production uses real
+  Turnstile keys, not Cloudflare's `1x…`, `2x…` or `3x…` test keys. If a test key is set, the form
+  shows "registration is paused" (the site now refuses them in production).
+- [ ] **CSP console check.** Open the public site (home page, register section, `/privacy`) and the
+  dashboard (`/login`, overview, a registration detail) in a desktop browser with the console open.
+  No `Content Security Policy` errors should appear. Check the headers:
+  ```sh
+  curl -sI https://<prod-domain>/ | grep -iE 'content-security-policy|x-content-type-options'
+  curl -sI https://<prod-domain>/api/health | grep -i cache-control        # must be no-store
+  curl -sI https://<admin-domain>/login | grep -iE 'content-security-policy|referrer-policy'
+  ```
+  See [Security headers](#security-headers).
+- [ ] **Rate limit the form.** Vercel → the web project → Settings → Firewall → add a rate-limit
+  rule: `POST` to `/` (the registration server action posts to the page), keyed by IP, about 10
+  requests per minute, action 429. Verify what the Hobby plan allows (the number of rules is limited).
+  Do not include `/api/webhooks/paymongo`.
+- [ ] **Dashboard against Neon (FRW-10 owner op).** On production, sign in as the owner and then as
+  the demo viewer: the viewer sees masked data (email masked, mobile masked, birthdate and emergency
+  contact hidden). Check the allowlist:
+  ```sh
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<admin-domain>/api/auth/sign-up/email \
+    -H 'content-type: application/json' -d '{}'
+  ```
+  Should be 404. See [Organizer dashboard (apps/admin)](#organizer-dashboard-appsadmin).
+- [ ] **Retention.** Run the weekly reseed with the owner's `MIGRATE_DATABASE_URL`. See
+  [Organizer dashboard (apps/admin) → Demo data](#organizer-dashboard-appsadmin). Afterwards, on
+  production, the owner's overview should show no "older than 7 days" notice.
+- [ ] **Env.** `ADMIN_URL` is set in the web Vercel project (Production and Preview). `/organizer`
+  on the site redirects to the dashboard. See [Organizer dashboard (apps/admin) → Demo links](#organizer-dashboard-appsadmin).
+
+When every box above is ticked, tag the release (merge `develop` → `main`) as v0.3.0 in the Deploy section.
+
 ## Roll back
 
 - **App:** Vercel dashboard → Deployments → the last good production deploy → **Instant
