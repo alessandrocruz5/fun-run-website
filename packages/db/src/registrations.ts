@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { Db } from "./client";
 import { isRaceId, RACES, type RaceId } from "./races";
 import { type Registration, registrations } from "./schema";
@@ -149,32 +149,85 @@ export async function markCancelled(db: Db, id: string): Promise<Registration | 
   return row ?? null;
 }
 
+// The confirmation email is claimed, then sent, then recorded. `confirmation_claimed_at` is the
+// claim, held by the one caller that is sending; `confirmation_sent_at` means delivered, and is
+// set only after Resend accepted the email (or answered that it was already sent). A sender that
+// dies mid-send leaves only a claim, which goes stale and can be taken again.
+
+/**
+ * A claim this old is abandoned: no shorter than a Vercel function's maximum duration (300 s by
+ * default with Fluid compute; nothing here raises `maxDuration`), and the sender claims after its
+ * function starts, so it is gone. Raising `maxDuration` above this breaks that.
+ */
+export const CLAIM_STALE_AFTER_MINUTES = 5;
+
+/**
+ * A stale claim is taken again only on a row paid this recently: inside Resend's 24 h idempotency
+ * window, so re-sending an email that actually went out answers "duplicate", which the caller
+ * treats as sent. A first claim is never time-limited.
+ */
+export const RECLAIM_WITHIN_HOURS = 23;
+
 /**
  * Claim the right to send the confirmation email. Returns the registration to exactly one caller
- * (it must be paid and not yet claimed); every other caller gets null. Call
- * `releaseConfirmation()` if the send fails so a retry can claim it again.
+ * (it must be paid, not yet delivered, and unclaimed or holding a stale claim); every other
+ * caller gets null. Call `markConfirmationSent()` once the send succeeds, or
+ * `releaseConfirmation()` if it fails so a retry can claim it again.
  */
 export async function claimConfirmation(db: Db, id: string): Promise<Registration | null> {
   const [row] = await db
     .update(registrations)
-    .set({ confirmationSentAt: sql`now()` })
+    .set({ confirmationClaimedAt: sql`now()` })
     .where(
       and(
         eq(registrations.id, id),
         eq(registrations.status, "paid"),
         isNull(registrations.confirmationSentAt),
+        or(
+          isNull(registrations.confirmationClaimedAt),
+          and(
+            lt(
+              registrations.confirmationClaimedAt,
+              sql`now() - make_interval(mins => ${CLAIM_STALE_AFTER_MINUTES})`,
+            ),
+            gt(registrations.paidAt, sql`now() - make_interval(hours => ${RECLAIM_WITHIN_HOURS})`),
+          ),
+        ),
       ),
     )
     .returning();
   return row ?? null;
 }
 
-/** Undo a `claimConfirmation()` after a failed send. Returns whether a claim was released. */
+/**
+ * Record that the confirmation email was delivered. Returns whether the row changed: false if
+ * it was already recorded. It doesn't require the claim, so a sender whose claim was taken over
+ * still records its delivery.
+ */
+export async function markConfirmationSent(db: Db, id: string): Promise<boolean> {
+  const rows = await db
+    .update(registrations)
+    .set({ confirmationSentAt: sql`now()` })
+    .where(and(eq(registrations.id, id), isNull(registrations.confirmationSentAt)))
+    .returning({ id: registrations.id });
+  return rows.length > 0;
+}
+
+/**
+ * Undo a `claimConfirmation()` after a failed send. Returns whether a claim was released; a
+ * delivered row is never touched.
+ */
 export async function releaseConfirmation(db: Db, id: string): Promise<boolean> {
   const rows = await db
     .update(registrations)
-    .set({ confirmationSentAt: null })
-    .where(and(eq(registrations.id, id), isNotNull(registrations.confirmationSentAt)))
+    .set({ confirmationClaimedAt: null })
+    .where(
+      and(
+        eq(registrations.id, id),
+        isNotNull(registrations.confirmationClaimedAt),
+        isNull(registrations.confirmationSentAt),
+      ),
+    )
     .returning({ id: registrations.id });
   return rows.length > 0;
 }

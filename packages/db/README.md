@@ -27,10 +27,13 @@ Each step is one conditional statement. A step that doesn't apply matches no row
 | `getRegistrationByReference` / `…ByCheckoutSessionId` | Lookups.                                                         |
 | `markPaid(db, payment)`                    | Not-paid → `paid` with payment ID, method, fee, net and `paid_at`, only if the paid amount equals the snapshot. A second call changes nothing. A `cancelled` row can still become paid. |
 | `markCancelled(db, id)`                    | `pending` → `cancelled`. Never touches a paid row.                          |
-| `claimConfirmation(db, id)`                | Sets `confirmation_sent_at` on a paid, unclaimed row: returns it to exactly one caller. |
-| `releaseConfirmation(db, id)`              | Clears the claim after a failed send.                                       |
+| `claimConfirmation(db, id)`                | Sets `confirmation_claimed_at` on a paid, undelivered row that is unclaimed or holds a stale claim (older than 5 min, on a row paid under 23 h ago): returns it to exactly one caller. |
+| `markConfirmationSent(db, id)`             | Sets `confirmation_sent_at` (delivered) once, after Resend accepted the email. Returns `false` if it was already set. |
+| `releaseConfirmation(db, id)`              | Clears `confirmation_claimed_at` after a failed send. Never touches a delivered row. |
 
-The claim is at-most-once: if the process dies between claim and send, no email goes out.
+`confirmation_sent_at` means delivered; `confirmation_claimed_at` is the claim. If the process
+dies between claim and delivery, the claim goes stale and the next caller takes it again; Resend's
+idempotency key (the registration ID) keeps a re-send inside 24 hours from being delivered twice.
 
 ## Database roles
 

@@ -226,11 +226,24 @@ payment: nothing was charged".
   for that domain only. Set `RESEND_API_KEY` and `EMAIL_FROM` (`Riverline Run <race@mail.<domain>>`)
   in Vercel **Production** and **Preview**, then redeploy. Locally, `onboarding@resend.dev` as the
   sender works without a domain, but only delivers to your Resend account's address.
+- **Deploy order.** Every query on `registrations` names the `confirmation_claimed_at` column
+  (migration `0004`), so this code on a database without it fails with `42703` (undefined column)
+  on the form, the success page and the webhook: the whole site is down, not only the email.
+  Apply `0004` (see **Migrations**) to `dev` before any Preview runs this code, and to `main`
+  before merging into `main`. A merge deploys by itself.
 - **When it is sent.** Only after a payment is recorded: whichever of the webhook and the success
-  page sees `paid` claims the row (`confirmation_sent_at`, one conditional update), sends, and
-  keeps the claim. Every other caller finds the claim taken and sends nothing. Pending and
-  cancelled registrations never get an email. Resend's `Idempotency-Key` is the registration ID,
-  so a request repeated within 24 hours is never delivered twice.
+  page sees `paid` claims the row (`confirmation_claimed_at`, one conditional update) and sends.
+  Every other caller finds the claim taken and sends nothing. Once Resend accepts the email,
+  `confirmation_sent_at` is set: it means delivered, and a row with it set is never sent again.
+  Pending and cancelled registrations never get an email. Resend's `Idempotency-Key` is the
+  registration ID, so a request repeated within 24 hours is never delivered twice.
+- **Self-heal.** A claim older than 5 minutes on a row that is still unsent and was paid less than
+  23 hours ago is taken again by the next caller, which sends the email. If the first sender had
+  in fact reached Resend, the same idempotency key means it isn't delivered twice. In practice
+  that caller is the runner reloading `/register/success` (the checkout cookie lasts 24 hours) or
+  a webhook event you resend from the PayMongo dashboard. PayMongo's automatic retries rarely
+  heal a row: a caller that finds the claim held answers 200, which ends them, and a retry that
+  isn't re-signed is refused as `stale` after 5 minutes. Don't wait for it: see **Stuck claim**.
 - **When sending fails** (Resend down, rate-limited, bad key, missing env), the claim is released
   and the error rethrown: the webhook answers 500 so PayMongo retries, and the success page says
   "We couldn't check just now" so the runner's **Check again** retries. The payment itself stays
@@ -240,17 +253,39 @@ payment: nothing was charged".
     `422 validation_error` is usually `EMAIL_FROM` on an unverified domain, `429` is Resend's rate
     limit. `EnvValidationError` names the missing variable.
   - `email.release_failed`: the claim couldn't be released after a failed send (database down).
-    The row keeps `confirmation_sent_at` with no email sent. See **Stuck claim** below.
+    The row keeps its claim with no email sent: see **Stuck claim**.
+  - `email.mark_sent_failed`: the email went out, but recording the delivery failed (database
+    down). The confirmation still succeeds. The row keeps only its claim, so the dashboard shows the
+    email as not sent until a later caller sends it again (Resend doesn't deliver it twice) and
+    records it: see **Stuck claim**.
   - `email.duplicate`: Resend had already used this registration's key with a different payload
     (e.g. the template changed between two attempts within 24 hours). That earlier request went
-    out, so this one is treated as sent.
-- **Stuck claim.** A row with `confirmation_sent_at` set but no email in Resend → Emails (search by
-  the reference in the subject) means the function died mid-send. As the owner, clear the claim and
-  resend the webhook event from the PayMongo dashboard:
+    out, so this one is treated as sent and recorded as delivered.
+- **Stuck claim.** A paid row whose claim went stale with no delivery recorded (it shows "not
+  sent" in the dashboard). Find them:
   ```sql
-  UPDATE registrations SET confirmation_sent_at = NULL
-  WHERE reference = '<RR-…>' AND status = 'paid';
+  SELECT reference, paid_at, confirmation_claimed_at FROM registrations
+  WHERE status = 'paid' AND confirmation_sent_at IS NULL
+    AND confirmation_claimed_at < now() - interval '5 minutes';
   ```
+  - **Paid less than 23 hours ago:** fix it now. Resend that payment's webhook event from the
+    PayMongo dashboard: the stale claim is taken again and the email sent, and if it had already
+    gone out, Resend's idempotency key stops a second copy. No SQL needed.
+  - **Paid 23 hours ago or more:** a re-send is outside Resend's 24-hour idempotency window and
+    could deliver twice. Check Resend → Emails (search by the reference in the subject) first.
+    Resend keeps a limited history; if it no longer covers that date, you can't rule out a send.
+    With no send there, as the owner, clear the claim and resend the webhook event:
+    ```sql
+    UPDATE registrations SET confirmation_claimed_at = NULL
+    WHERE reference = '<RR-…>' AND status = 'paid' AND confirmation_sent_at IS NULL;
+    ```
+  - **Stuck before migration `0004`:** the row shows `confirmation_sent_at` set although no email
+    went out, so the query above doesn't list it. Only when Resend → Emails shows no send, clear
+    both columns and resend the webhook event:
+    ```sql
+    UPDATE registrations SET confirmation_sent_at = NULL, confirmation_claimed_at = NULL
+    WHERE reference = '<RR-…>' AND status = 'paid';
+    ```
 - **Check it** (production): pay with card `4343 4343 4343 4345` using an address you can read.
   One email arrives with both parts (Gmail → Show original lists `text/plain` and `text/html`).
   Resend → Emails shows one send for the reference. Reload `/register/success` and resend the

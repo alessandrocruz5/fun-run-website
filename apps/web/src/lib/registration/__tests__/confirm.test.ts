@@ -1,8 +1,11 @@
 import {
+  CLAIM_STALE_AFTER_MINUTES,
   claimConfirmation,
   type Db,
   getRegistrationByCheckoutSessionId,
+  markConfirmationSent,
   markPaid,
+  RECLAIM_WITHIN_HOURS,
   type Registration,
   releaseConfirmation,
 } from "@rr/db";
@@ -20,6 +23,7 @@ vi.mock("@rr/db", async (importOriginal) => ({
   getRegistrationByCheckoutSessionId: vi.fn(),
   markPaid: vi.fn(),
   claimConfirmation: vi.fn(),
+  markConfirmationSent: vi.fn(),
   releaseConfirmation: vi.fn(),
 }));
 
@@ -55,6 +59,7 @@ function row(overrides: Partial<Registration> = {}): Registration {
     feeCentavos: null,
     netCentavos: null,
     paidAt: null,
+    confirmationClaimedAt: null,
     confirmationSentAt: null,
     createdAt: new Date(),
     ...overrides,
@@ -105,8 +110,9 @@ beforeEach(() => {
   vi.mocked(markPaid).mockResolvedValue(paidRow);
   vi.mocked(claimConfirmation).mockImplementation(async () => ({
     ...paidRow,
-    confirmationSentAt: new Date(),
+    confirmationClaimedAt: new Date(),
   }));
+  vi.mocked(markConfirmationSent).mockResolvedValue(true);
   vi.mocked(releaseConfirmation).mockResolvedValue(true);
   vi.mocked(sendRegistrationConfirmed).mockResolvedValue({ status: "sent", id: "email_1" });
   vi.stubEnv("SITE_URL", "https://riverline.test");
@@ -337,13 +343,22 @@ describe("checkCheckout", () => {
 
 describe("confirmation email", () => {
   const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const MINUTE = 60_000;
+
+  /** The emulated database's `now()`: shortly after the payment, moved on only by `minutesPass`. */
+  let dbNow = 0;
+  const minutesPass = (minutes: number) => {
+    dbNow += minutes * MINUTE;
+  };
 
   /**
-   * An in-memory registrations row behind the mocked `@rr/db` steps. Each step is atomic, as its
-   * one conditional UPDATE is in Postgres, but yields first so concurrent callers interleave.
+   * An in-memory registrations row behind the mocked `@rr/db` steps, following their SQL:
+   * `confirmationClaimedAt` is the claim, `confirmationSentAt` means delivered. Each step is atomic,
+   * as its one conditional UPDATE is in Postgres, but yields first so concurrent callers interleave.
    */
   function storedRow(initial: Registration) {
     let current = { ...initial };
+    dbNow = PAID_AT.getTime() + MINUTE;
     vi.mocked(getRegistrationByCheckoutSessionId).mockImplementation(async () => ({ ...current }));
     vi.mocked(markPaid).mockImplementation(async (_db, input) => {
       await tick();
@@ -361,14 +376,30 @@ describe("confirmation email", () => {
     });
     vi.mocked(claimConfirmation).mockImplementation(async () => {
       await tick();
-      if (current.status !== "paid" || current.confirmationSentAt) return null;
-      current = { ...current, confirmationSentAt: new Date() };
+      const claimedAt = current.confirmationClaimedAt?.getTime();
+      const paidAt = current.paidAt?.getTime() ?? 0;
+      const claimable =
+        current.status === "paid" &&
+        current.confirmationSentAt === null &&
+        (claimedAt === undefined ||
+          (claimedAt < dbNow - CLAIM_STALE_AFTER_MINUTES * MINUTE &&
+            paidAt > dbNow - RECLAIM_WITHIN_HOURS * 60 * MINUTE));
+      if (!claimable) return null;
+      current = { ...current, confirmationClaimedAt: new Date(dbNow) };
       return { ...current };
     });
+    vi.mocked(markConfirmationSent).mockImplementation(async () => {
+      await tick();
+      if (current.confirmationSentAt !== null) return false;
+      current = { ...current, confirmationSentAt: new Date(dbNow) };
+      return true;
+    });
     vi.mocked(releaseConfirmation).mockImplementation(async () => {
-      const released = current.confirmationSentAt !== null;
-      current = { ...current, confirmationSentAt: null };
-      return released;
+      if (current.confirmationClaimedAt === null || current.confirmationSentAt !== null) {
+        return false;
+      }
+      current = { ...current, confirmationClaimedAt: null };
+      return true;
     });
     return () => current;
   }
@@ -472,7 +503,11 @@ describe("confirmation email", () => {
 
     await expect(confirmPayment(db as unknown as Db, session())).rejects.toBeInstanceOf(EmailError);
     expect(releaseConfirmation).toHaveBeenCalledWith(db, ROW_ID);
-    expect(stored()).toMatchObject({ status: "paid", confirmationSentAt: null });
+    expect(stored()).toMatchObject({
+      status: "paid",
+      confirmationClaimedAt: null,
+      confirmationSentAt: null,
+    });
 
     expect(await confirmPayment(db as unknown as Db, session())).toMatchObject({
       status: "paid",
@@ -490,7 +525,7 @@ describe("confirmation email", () => {
 
     await expect(confirmPayment(db as unknown as Db, session())).rejects.toThrow(/SITE_URL/);
     expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
-    expect(stored().confirmationSentAt).toBeNull();
+    expect(stored()).toMatchObject({ confirmationClaimedAt: null, confirmationSentAt: null });
   });
 
   it("logs a failed send by registration ID, status and code only", async () => {
@@ -532,6 +567,114 @@ describe("confirmation email", () => {
     expect(await checkCheckout("cs_test1")).toEqual({ status: "unavailable" });
     expect(await checkCheckout("cs_test1")).toMatchObject({ status: "paid" });
     expect(sendRegistrationConfirmed).toHaveBeenCalledTimes(2);
+  });
+
+  it("records delivery once Resend accepts the email, holding only the claim while it sends", async () => {
+    const stored = storedRow(row());
+    let duringSend: Registration | undefined;
+    vi.mocked(sendRegistrationConfirmed).mockImplementation(async () => {
+      duringSend = { ...stored() };
+      return { status: "sent", id: "email_1" };
+    });
+
+    expect(await confirmPayment(db as unknown as Db, session())).toMatchObject({ status: "paid" });
+
+    expect(duringSend).toMatchObject({
+      confirmationClaimedAt: expect.any(Date),
+      confirmationSentAt: null,
+    });
+    expect(markConfirmationSent).toHaveBeenCalledTimes(1);
+    expect(markConfirmationSent).toHaveBeenCalledWith(db, ROW_ID);
+    expect(stored().confirmationSentAt).not.toBeNull();
+  });
+
+  it("records a duplicate as delivered: Resend already sent that email", async () => {
+    const stored = storedRow(row());
+    vi.mocked(sendRegistrationConfirmed).mockResolvedValue({ status: "duplicate" });
+
+    expect(await confirmPayment(db as unknown as Db, session())).toMatchObject({ status: "paid" });
+    expect(markConfirmationSent).toHaveBeenCalledTimes(1);
+    expect(markConfirmationSent).toHaveBeenCalledWith(db, ROW_ID);
+    expect(releaseConfirmation).not.toHaveBeenCalled();
+    expect(stored().confirmationSentAt).not.toBeNull();
+  });
+
+  it("doesn't record delivery when the send fails, and releases the claim", async () => {
+    const stored = storedRow(row());
+    vi.mocked(sendRegistrationConfirmed).mockRejectedValueOnce(new EmailError("down", 503));
+
+    await expect(confirmPayment(db as unknown as Db, session())).rejects.toBeInstanceOf(EmailError);
+    expect(markConfirmationSent).not.toHaveBeenCalled();
+    expect(releaseConfirmation).toHaveBeenCalledWith(db, ROW_ID);
+    expect(stored()).toMatchObject({ confirmationClaimedAt: null, confirmationSentAt: null });
+  });
+
+  it("still confirms when recording delivery fails, logging the ID only; a later caller records it", async () => {
+    const stored = storedRow(row());
+    vi.mocked(markConfirmationSent).mockRejectedValueOnce(
+      new Error("Failed query … params: juana@example.test", { cause: { code: "08006" } }),
+    );
+
+    expect(await confirmPayment(db as unknown as Db, session())).toMatchObject({ status: "paid" });
+    expect(sendRegistrationConfirmed).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledWith("email.mark_sent_failed", {
+      registrationId: ROW_ID,
+      error: "Error",
+      code: "08006",
+    });
+    expect(JSON.stringify(consoleError.mock.calls)).not.toMatch(/juana|Juana|Dela Cruz/);
+    expect(releaseConfirmation).not.toHaveBeenCalled();
+    expect(stored()).toMatchObject({
+      confirmationClaimedAt: expect.any(Date),
+      confirmationSentAt: null,
+    });
+
+    // The claim holds for 5 minutes. Then the next caller sends again under the same idempotency
+    // key, so Resend doesn't deliver it twice, and records the delivery.
+    await confirmPayment(db as unknown as Db, session());
+    expect(sendRegistrationConfirmed).toHaveBeenCalledTimes(1);
+    minutesPass(CLAIM_STALE_AFTER_MINUTES + 1);
+    expect(await confirmPayment(db as unknown as Db, session())).toMatchObject({ status: "paid" });
+    expect(sendRegistrationConfirmed).toHaveBeenCalledTimes(2);
+    expect(
+      vi.mocked(sendRegistrationConfirmed).mock.calls.map(([input]) => input.registrationId),
+    ).toEqual([ROW_ID, ROW_ID]);
+    expect(stored().confirmationSentAt).not.toBeNull();
+  });
+
+  it("takes a stale claim from a sender that died and sends once more, keyed by the registration ID", async () => {
+    const stored = storedRow(paidRow);
+    resendTakes(5);
+    // A first caller claimed the row, then its function died before sending.
+    expect(await claimConfirmation(db as unknown as Db, ROW_ID)).not.toBeNull();
+
+    // While the claim is fresh, nobody else sends.
+    minutesPass(CLAIM_STALE_AFTER_MINUTES - 1);
+    expect(await confirmPayment(db as unknown as Db, session())).toMatchObject({ status: "paid" });
+    expect(await checkCheckout("cs_test1")).toMatchObject({ status: "paid" });
+    expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
+
+    // Once it's stale, the webhook retry and success-page reloads, all at once, send it once.
+    minutesPass(2);
+    const results = await Promise.all([
+      confirmPayment(db as unknown as Db, session()),
+      checkCheckout("cs_test1"),
+      checkCheckout("cs_test1"),
+    ]);
+    expect(results.every((r) => r.status === "paid")).toBe(true);
+    expect(sendRegistrationConfirmed).toHaveBeenCalledTimes(1);
+    expect(sendRegistrationConfirmed).toHaveBeenCalledWith(
+      expect.objectContaining({ registrationId: ROW_ID, to: "juana@example.test" }),
+    );
+    expect(markConfirmationSent).toHaveBeenCalledTimes(1);
+    expect(markConfirmationSent).toHaveBeenCalledWith(db, ROW_ID);
+    expect(stored().confirmationSentAt).not.toBeNull();
+
+    // Delivered: nothing goes out again, however late.
+    minutesPass(CLAIM_STALE_AFTER_MINUTES + 1);
+    await confirmPayment(db as unknown as Db, session());
+    await checkCheckout("cs_test1");
+    expect(sendRegistrationConfirmed).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -576,7 +719,7 @@ describe("confirmation email", () => {
     expect(sendRegistrationConfirmed).not.toHaveBeenCalled();
   });
 
-  it("logs a duplicate (key reused with another payload) and keeps the claim", async () => {
+  it("logs a duplicate (key reused with another payload) without releasing the claim", async () => {
     vi.mocked(sendRegistrationConfirmed).mockResolvedValue({ status: "duplicate" });
     await sendConfirmation(db as unknown as Db, paidRow);
     expect(consoleWarn).toHaveBeenCalledWith("email.duplicate", { registrationId: ROW_ID });

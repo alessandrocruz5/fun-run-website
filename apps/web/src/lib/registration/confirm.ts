@@ -3,6 +3,7 @@ import {
   type Db,
   getDb,
   getRegistrationByCheckoutSessionId,
+  markConfirmationSent,
   markPaid,
   RACES,
   type Registration,
@@ -24,9 +25,16 @@ import { formatGunTime, formatPeso, getRaceView, getSiteUrl, SITE } from "@/cont
  * server read from PayMongo: the success page looks it up (`checkCheckout()`), and the signed
  * webhook (FRW-6) receives it. Nothing in a URL is trusted. Server only.
  *
- * Every caller that sees `paid` then sends the confirmation email (FRW-8), and exactly one of them
- * wins the claim on the row. A failed send releases the claim and throws, so the webhook answers
- * 5xx (PayMongo retries) and the success page offers "check again".
+ * Every caller that sees `paid` then sends the confirmation email (FRW-8). Exactly one of them wins
+ * the claim on the row (`confirmation_claimed_at`), sends, and records delivery
+ * (`confirmation_sent_at`) once Resend has accepted it. A failed send releases the claim and
+ * throws, so the webhook answers 5xx (PayMongo retries) and the success page offers "check again".
+ * A claim left by a function that died goes stale after 5 minutes, and the next caller after that
+ * takes it again if the row was paid less than 23 hours ago (inside Resend's 24 h idempotency
+ * window, so an email that did go out isn't delivered twice). In practice that caller is a
+ * success-page load (the checkout cookie lasts 24 h) or a webhook event resent from the PayMongo
+ * dashboard. PayMongo's own retries rarely are: a caller that finds the claim held answers 200,
+ * which ends them, and a retry that isn't re-signed is refused as stale after 5 minutes.
  */
 
 /** httpOnly cookie, set by the form just before the redirect to PayMongo: the checkout session ID. */
@@ -107,11 +115,17 @@ export function confirmationDetails(registration: Registration): RegistrationCon
 }
 
 /**
- * Send the confirmation email for a paid registration, once. Only the caller that wins the claim
- * on the row sends; the rest return at once. If the send fails, the claim is released and the error
- * rethrown, so the next attempt (webhook retry, success-page reload) claims it again. Resend's
- * idempotency key is the registration ID, so even a send that reached Resend before failing here
- * can't go out twice within 24 hours.
+ * Send the confirmation email for a paid registration, once. A row with `confirmationSentAt` set
+ * was delivered, so nothing happens. Otherwise only the caller that wins the claim on the row
+ * sends; the rest return at once. Once Resend accepts the email (or answers `duplicate`: it already
+ * sent it), delivery is recorded with `markConfirmationSent()`.
+ *
+ * If the send fails, the claim is released and the error rethrown, so the next attempt (webhook
+ * retry, success-page reload) claims it again. If recording delivery fails, the email is out, so
+ * that is logged and not thrown: the claim goes stale after 5 minutes, and a later caller, if one
+ * comes within 23 hours of payment (see the top of this file), takes it, sends again and retries
+ * the mark. Resend's idempotency key
+ * is the registration ID, so no such re-send goes out twice within 24 hours.
  */
 export async function sendConfirmation(db: Db, registration: Registration): Promise<void> {
   if (registration.status !== "paid" || registration.confirmationSentAt) return;
@@ -134,6 +148,12 @@ export async function sendConfirmation(db: Db, registration: Registration): Prom
       logError("email.release_failed", releaseError, ids);
     }
     throw error;
+  }
+
+  try {
+    await markConfirmationSent(db, claimed.id);
+  } catch (error) {
+    logError("email.mark_sent_failed", error, ids);
   }
 }
 
