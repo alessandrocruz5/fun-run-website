@@ -4,6 +4,9 @@ Registration site for **Riverline Run**, a fictional fun run organized by the fi
 Collective. It is a portfolio project: payments run in PayMongo **test mode** only, and no real
 event takes place.
 
+Registration: https://fun-run-website-sigma.vercel.app/
+Dashboard: https://fun-run-dashboard.vercel.app/login
+
 > Fictional event · Test mode, no real payments
 
 ## Packages
